@@ -41,7 +41,6 @@ type Prompt = { kind: 'create' } | { kind: 'rename'; playlist: Playlist };
             <view [virtualListRow]="row">
               <app-track-row
                 [track]="row.item"
-                [number]="row.index + 1"
                 [current]="player.current()?.id === row.item.id"
                 (press)="playSong(playlist, row.index)"
                 (longPress)="reorder(playlist, row.item)"

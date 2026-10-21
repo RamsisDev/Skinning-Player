@@ -13,9 +13,11 @@ import {
   fakeMediaLibrary,
   memoryFiles,
   memoryStorage,
+  musicUri,
+  taggedMp3,
 } from '../testing/fakes.ts';
 
-type AudioFile = [id: string, filename: string | null, seconds: number | null];
+type AudioFile = [id: string, filename: string | null, seconds: number | null, modified?: number];
 
 async function launch(files: AudioFile[], options: FakeMediaLibraryOptions = {}, more: Provider[] = []) {
   const engine = fakeEngine();
@@ -94,11 +96,27 @@ test('names each song from its file, sorted by title, and leaves out a file with
   const interlude = screen.getByRole('button', { name: 'Interlude' });
   const laFemme = screen.getByRole('button', { name: 'La Femme d Argent, Air' });
 
-  expect(within(digitalLove).getByText('1')).toBeTruthy();
-  expect(within(interlude).getByText('2')).toBeTruthy();
+  const rows = [digitalLove, interlude, laFemme];
+  expect(screen.getAllByRole('button').filter((node) => rows.includes(node))).toEqual(rows);
   expect(within(interlude).getByText('Unknown artist  ·  1:15')).toBeTruthy();
-  expect(within(laFemme).getByText('3')).toBeTruthy();
   expect(within(laFemme).getByText('Air')).toBeTruthy();
+});
+
+test('leads each song with a thumbnail of the cover in its file, or a placeholder without one', async () => {
+  const disk = new Map([[musicUri('1'), taggedMp3({ title: 'With art', artist: 'Juanes' }, [0xff, 0xd8, 0xff, 0xe0])]]);
+  await launch(
+    [
+      ['1', 'with-art.mp3', 200],
+      ['2', 'Without art.mp3', 180],
+    ],
+    {},
+    [memoryFiles(disk)],
+  );
+
+  const withArt = await screen.findByRole('button', { name: 'With art, Juanes' });
+  expect(await within(withArt).findByRole('image', { name: 'Cover of With art' })).toBeTruthy();
+  const withoutArt = screen.getByRole('button', { name: 'Without art' });
+  expect(within(withoutArt).getByRole('image', { name: 'No cover for Without art' })).toBeTruthy();
 });
 
 test('shows a loading screen that counts the songs while a large library is read a page at a time', async () => {
@@ -115,7 +133,7 @@ test('shows a loading screen that counts the songs while a large library is read
 
   expect(await screen.findByRole('progressbar', { name: `Reading your music, ${SCAN_PAGE_SIZE} songs found` })).toBeTruthy();
   expect(screen.getByText(`${SCAN_PAGE_SIZE} songs found`)).toBeTruthy();
-  expect(screen.queryByPlaceholderText('Search songs or artists')).toBeNull();
+  expect(screen.queryByPlaceholderText('Search songs, artists or albums')).toBeNull();
 
   release();
   expect(await screen.findByText('600 songs')).toBeTruthy();
@@ -125,7 +143,7 @@ test('shows a loading screen that counts the songs while a large library is read
 
 test('says when a search matches nothing, and shows every song again once it is cleared', async () => {
   const { user } = await launch(songs());
-  const search = await screen.findByPlaceholderText('Search songs or artists');
+  const search = await screen.findByPlaceholderText('Search songs, artists or albums');
 
   await user.type(search, 'kraftwerk');
   expect(await screen.findByText('No songs match your search.')).toBeTruthy();
@@ -166,7 +184,7 @@ test('picks up a song added to the device when the user rescans the library', as
 test('plays only the songs that match the search with play all, and moves to the next match', async () => {
   const { user, engine } = await launch(songs());
 
-  await user.type(await screen.findByPlaceholderText('Search songs or artists'), 'daft');
+  await user.type(await screen.findByPlaceholderText('Search songs, artists or albums'), 'daft');
   expect(await screen.findByText('2 of 3 songs')).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Play all' }));
 
@@ -317,4 +335,100 @@ test('refuses an image too large for a cover, and says why', async () => {
   expect(dialogs.open?.message).toBe('The image is too large for a cover (10 MB at most).');
   await dialogs.answer('OK');
   expect(screen.getByText('This song has no cover yet.')).toBeTruthy();
+});
+
+/** Three songs whose files are tagged, and one whose file has no tags to read. */
+function taggedLibrary() {
+  const files: AudioFile[] = [
+    ['1', 'A Dios Le Pido.mp3', 211],
+    ['2', 'Amarrame_spotdown.org.mp3', 200],
+    ['3', 'Al Cielo No.mp3', 240],
+    ['4', 'Daft Punk - Digital Love.mp3', 301],
+  ];
+  const disk = new Map([
+    [musicUri('1'), taggedMp3({ title: 'A Dios Le Pido', artist: 'Juanes', album: 'Un Día Normal', year: '2002' })],
+    [musicUri('2'), taggedMp3({ title: 'Amárrame', artist: 'Mon Laferte, Juanes', album: 'La Trenza', year: '2017' })],
+    [musicUri('3'), taggedMp3({ title: 'Al Cielo No', artist: 'El Cuarteto De Nos', album: 'Canciones del Corazón', year: '2007' })],
+  ]);
+  return { files, disk };
+}
+
+test('names each song by the tags in its file, and finds it by album, without accents', async () => {
+  const { files, disk } = taggedLibrary();
+  const { user } = await launch(files, {}, [memoryFiles(disk)]);
+
+  expect(await screen.findByText('4 songs')).toBeTruthy();
+  const amarrame = screen.getByRole('button', { name: 'Amárrame, Mon Laferte, Juanes' });
+  expect(within(amarrame).getByText('Mon Laferte, Juanes  ·  La Trenza  ·  3:20')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Digital Love, Daft Punk' })).toBeTruthy();
+
+  await user.type(screen.getByPlaceholderText('Search songs, artists or albums'), 'corazon');
+  expect(await screen.findByText('1 of 4 songs')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Al Cielo No, El Cuarteto De Nos' })).toBeTruthy();
+});
+
+test('filters by artist, then offers only the years that artist has, and clears the filters', async () => {
+  const { files, disk } = taggedLibrary();
+  const { user, engine } = await launch(files, {}, [memoryFiles(disk)]);
+  expect(await screen.findByText('4 songs')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Genre' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+
+  await user.press(screen.getByRole('button', { name: 'Artist' }));
+  expect(await screen.findByRole('heading', { name: 'Artist' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Mon Laferte, 1 song' })).toBeTruthy();
+  expect(stateOf(screen.getByRole('button', { name: 'All artists' }))).toMatchObject({ selected: true });
+  await user.press(screen.getByRole('button', { name: 'Juanes, 2 songs' }));
+
+  expect(await screen.findByText('2 of 4 songs')).toBeTruthy();
+  expect(stateOf(screen.getByRole('button', { name: 'Artist: Juanes' }))).toMatchObject({ selected: true });
+
+  await user.press(screen.getByRole('button', { name: 'Year' }));
+  expect(await screen.findByRole('button', { name: '2017, 1 song' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: '2002, 1 song' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: '2007, 1 song' })).toBeNull();
+  await user.press(screen.getByRole('button', { name: '2017, 1 song' }));
+
+  expect(await screen.findByText('1 of 4 songs')).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Play all' }));
+  expect(engine.loaded).toEqual([musicUri('2')]);
+
+  await user.press(screen.getByRole('button', { name: 'Clear filters' }));
+  expect(await screen.findByText('4 songs')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Artist' })).toBeTruthy();
+});
+
+test('lifts a filter from its sheet, keeping the others', async () => {
+  const { files, disk } = taggedLibrary();
+  const { user } = await launch(files, {}, [memoryFiles(disk)]);
+
+  await user.press(await screen.findByRole('button', { name: 'Album' }));
+  await user.press(await screen.findByRole('button', { name: 'La Trenza, 1 song' }));
+  await user.press(await screen.findByRole('button', { name: 'Year' }));
+  await user.press(await screen.findByRole('button', { name: '2017, 1 song' }));
+  expect(await screen.findByText('1 of 4 songs')).toBeTruthy();
+
+  await user.press(screen.getByRole('button', { name: 'Album: La Trenza' }));
+  await user.press(await screen.findByRole('button', { name: 'All albums' }));
+
+  expect(await screen.findByText('1 of 4 songs')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Album' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Year: 2017' })).toBeTruthy();
+});
+
+test('reads the tags of a file again on a rescan only once the file has changed', async () => {
+  const files: AudioFile[] = [['1', 'track01.mp3', 200, 1000]];
+  const disk = new Map([[musicUri('1'), taggedMp3({ title: 'First take' })]]);
+  const { user } = await launch(files, {}, [memoryFiles(disk)]);
+  expect(await screen.findByRole('button', { name: 'First take' })).toBeTruthy();
+  expect(disk.has('file:///cache/library-tags.json')).toBe(true);
+
+  disk.set(musicUri('1'), taggedMp3({ title: 'Second take' }));
+  await user.press(screen.getByRole('button', { name: 'Rescan library' }));
+  expect(await screen.findByText('1 song')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'First take' })).toBeTruthy();
+
+  files[0] = ['1', 'track01.mp3', 200, 2000];
+  await user.press(screen.getByRole('button', { name: 'Rescan library' }));
+  expect(await screen.findByRole('button', { name: 'Second take' })).toBeTruthy();
 });

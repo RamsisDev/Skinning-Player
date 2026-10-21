@@ -2,6 +2,7 @@
  * The picture an ID3v2 tag carries (versions 2.2, 2.3 and 2.4), as MP3s and some WAVs do. The
  * media store keeps no artwork for audio files, so the app reads it from the file itself.
  */
+import { type ByteReader, bytesReader, subReader } from './byte-reader.ts';
 
 export interface EmbeddedPicture {
   readonly mime: string;
@@ -44,6 +45,64 @@ function resync(bytes: Uint8Array): Uint8Array {
   return out.subarray(0, n);
 }
 
+/** One frame of a tag: its id (`TIT2`, `APIC`, or `TT2`, `PIC` in 2.2) and its body, read on demand. */
+export interface Id3Frame {
+  readonly id: string;
+  readonly size: number;
+  read(): Uint8Array;
+}
+
+/**
+ * The frames of the ID3v2 tag that starts at `start`, reading only their headers until a body is
+ * asked for, so a tag's pictures are never loaded to get at its text.
+ */
+export function* id3Frames(file: ByteReader, start = 0): Generator<Id3Frame> {
+  const head = file.read(start, 10);
+  const size = id3TagSize(head);
+  if (!size) return;
+  const version = head[3]!;
+  const flags = head[5]!;
+  let tag = subReader(file, start + 10, size);
+  // In 2.2 and 2.3 unsynchronisation covers the whole tag; in 2.4 each frame says so itself.
+  if (flags & 0x80 && version < 4) tag = bytesReader(resync(tag.read(0, tag.size)));
+
+  let at = 0;
+  if (flags & 0x40 && version > 2) {
+    const extended = tag.read(0, 4);
+    at = version === 4 ? syncsafe(extended, 0) : uint32(extended, 0) + 4;
+  }
+
+  const v22 = version === 2;
+  const headerSize = v22 ? 6 : 10;
+  while (at + headerSize <= tag.size) {
+    const header = tag.read(at, headerSize);
+    const id = ascii(header, 0, v22 ? 3 : 4);
+    if (!/^[A-Z0-9]{3,4}$/.test(id)) return;
+    const frameSize = v22
+      ? (header[3]! << 16) | (header[4]! << 8) | header[5]!
+      : version === 4
+        ? syncsafe(header, 4)
+        : uint32(header, 4);
+    const from = at + headerSize;
+    if (frameSize <= 0 || from + frameSize > tag.size) return;
+    const frameFlags = v22 ? 0 : header[9]!;
+    const reader = tag;
+    yield {
+      id,
+      size: frameSize,
+      read() {
+        let frame = reader.read(from, frameSize);
+        if (version === 4) {
+          if (frameFlags & 0x02) frame = resync(frame);
+          if (frameFlags & 0x01) frame = frame.subarray(4);
+        }
+        return frame;
+      },
+    };
+    at = from + frameSize;
+  }
+}
+
 /** Where the text that starts at `from` ends, past its terminator: one zero byte, or two for UTF-16. */
 function skipText(b: Uint8Array, from: number, encoding: number): number {
   if (encoding === 1 || encoding === 2) {
@@ -81,51 +140,24 @@ function readPicture(body: Uint8Array, v22: boolean): { type: number; picture: E
   return data.length ? { type, picture: { mime, data } } : null;
 }
 
+/** The front cover among a tag's frames if it marks one, otherwise its first picture. */
+export function coverFromFrames(frames: Iterable<Id3Frame>): EmbeddedPicture | null {
+  let first: EmbeddedPicture | null = null;
+  for (const frame of frames) {
+    if (frame.id !== 'APIC' && frame.id !== 'PIC') continue;
+    const found = readPicture(frame.read(), frame.id === 'PIC');
+    if (found?.type === FRONT_COVER) return found.picture;
+    first ??= found?.picture ?? null;
+  }
+  return first;
+}
+
 /**
  * The cover in a whole ID3v2 tag, header included: the front cover if the tag marks one,
  * otherwise its first picture. Null when it has none or the tag is not one this can read.
  */
 export function coverFromId3(tag: Uint8Array): EmbeddedPicture | null {
-  const size = id3TagSize(tag);
-  if (!size) return null;
-  const version = tag[3]!;
-  const flags = tag[5]!;
-  let body = tag.subarray(10, 10 + size);
-  // In 2.2 and 2.3 unsynchronisation covers the whole tag; in 2.4 each frame says so itself.
-  if (flags & 0x80 && version < 4) body = resync(body);
-
-  let at = 0;
-  if (flags & 0x40 && version > 2) at = version === 4 ? syncsafe(body, 0) : uint32(body, 0) + 4;
-
-  const v22 = version === 2;
-  const headerSize = v22 ? 6 : 10;
-  let first: EmbeddedPicture | null = null;
-  while (at + headerSize <= body.length) {
-    const id = ascii(body, at, at + (v22 ? 3 : 4));
-    if (!/^[A-Z0-9]{3,4}$/.test(id)) break;
-    const frameSize = v22
-      ? (body[at + 3]! << 16) | (body[at + 4]! << 8) | body[at + 5]!
-      : version === 4
-        ? syncsafe(body, at + 4)
-        : uint32(body, at + 4);
-    const start = at + headerSize;
-    const end = start + frameSize;
-    if (frameSize <= 0 || end > body.length) break;
-
-    if (id === (v22 ? 'PIC' : 'APIC')) {
-      let frame = body.subarray(start, end);
-      if (version === 4) {
-        const frameFlags = body[at + 9]!;
-        if (frameFlags & 0x02) frame = resync(frame);
-        if (frameFlags & 0x01) frame = frame.subarray(4);
-      }
-      const found = readPicture(frame, v22);
-      if (found?.type === FRONT_COVER) return found.picture;
-      first ??= found?.picture ?? null;
-    }
-    at = end;
-  }
-  return first;
+  return coverFromFrames(id3Frames(bytesReader(tag)));
 }
 
 /** The file extension an image of this type is saved under. */

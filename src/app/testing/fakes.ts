@@ -149,11 +149,11 @@ export interface FakeMediaLibraryOptions {
 
 /**
  * A media store holding the given audio files, whose permission is not granted until asked for.
- * `files` are `[id, filename, seconds]`, read again on every scan, so a test can change the array
- * between scans to stand for songs added to or removed from the device.
+ * `files` are `[id, filename, seconds, modified?]`, read again on every scan, so a test can change
+ * the array between scans to stand for songs added to, removed from or changed on the device.
  */
 export function fakeMediaLibrary(
-  files: readonly (readonly [string, string | null, number | null])[],
+  files: readonly (readonly [string, string | null, number | null, number?])[],
   options: FakeMediaLibraryOptions = {},
 ): Provider {
   const answers = [...(options.answers ?? [])];
@@ -186,10 +186,11 @@ export function fakeMediaLibrary(
         if (error) throw new Error(error);
       }
       await options.beforePage?.(this.from);
-      return files.slice(this.from, this.from + this.count).map(([id, filename, seconds]) => ({
+      return files.slice(this.from, this.from + this.count).map(([id, filename, seconds, modified]) => ({
         id,
         filename,
         duration: seconds === null ? null : seconds * 1000,
+        modificationTime: modified ?? null,
         mediaType: 'audio',
       }));
     }
@@ -198,7 +199,7 @@ export function fakeMediaLibrary(
     constructor(readonly id: string) {}
     async getUri(): Promise<string> {
       if (unplayable.has(this.id)) throw new Error(`No file for ${this.id}`);
-      return `file:///music/${this.id}.mp3`;
+      return musicUri(this.id);
     }
   }
   const source = {
@@ -215,6 +216,22 @@ export function fakeMediaLibrary(
     Query,
   };
   return { provide: MediaLibrary.SOURCE, useValue: source as never };
+}
+
+/** Where the fake media store says a song's file is, for a test to put bytes there with `memoryFiles`. */
+export const musicUri = (id: string): string => `file:///music/${id}.mp3`;
+
+/** An MP3 whose ID3v2.4 tag names its song, and holds a JPEG front cover of `cover`'s bytes if given. */
+export function taggedMp3(
+  tags: Readonly<Partial<Record<'title' | 'artist' | 'album' | 'genre' | 'year', string>>>,
+  cover?: readonly number[],
+): Uint8Array {
+  const ids = { title: 'TIT2', artist: 'TPE1', album: 'TALB', genre: 'TCON', year: 'TDRC' } as const;
+  const syncsafe = (n: number) => [(n >> 21) & 0x7f, (n >> 14) & 0x7f, (n >> 7) & 0x7f, n & 0x7f];
+  const frame = (id: string, body: number[]) => [...id].map((c) => c.charCodeAt(0)).concat(syncsafe(body.length), [0, 0], body);
+  const frames = Object.entries(tags).flatMap(([field, text]) => frame(ids[field as keyof typeof ids], [3, ...new TextEncoder().encode(text)]));
+  if (cover) frames.push(...frame('APIC', [0, ...[...'image/jpeg'].map((c) => c.charCodeAt(0)), 0, 3, 0, ...cover]));
+  return Uint8Array.from([0x49, 0x44, 0x33, 4, 0, 0, ...syncsafe(frames.length), ...frames, 0xff, 0xfb, 0x90, 0x64]);
 }
 
 export interface ShownDialog {

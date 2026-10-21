@@ -39,13 +39,14 @@ test('lists the songs on the device, and plays the one pressed in the full playe
   await user.press(await screen.findByRole('button', { name: 'Digital Love, Daft Punk' }));
 
   expect(await screen.findByRole('heading', { name: 'Digital Love' })).toBeTruthy();
-  expect((await screen.findAllByRole('image', { name: 'No cover for Digital Love' })).length).toBe(2);
+  // The full player's, the mini player's and the library row's.
+  expect((await screen.findAllByRole('image', { name: 'No cover for Digital Love' })).length).toBe(3);
   expect(engine.loaded).toEqual(['file:///music/1.mp3']);
   expect(screen.getAllByRole('button', { name: 'Pause' }).length).toBeGreaterThan(0);
   expect(screen.getAllByRole('button', { name: 'Shuffle' }).length).toBeGreaterThan(0);
 
   await user.press(screen.getByRole('button', { name: 'Close player' }));
-  await user.type(screen.getByPlaceholderText('Search songs or artists'), 'air');
+  await user.type(screen.getByPlaceholderText('Search songs, artists or albums'), 'air');
   expect(await screen.findByText('1 of 2 songs')).toBeTruthy();
 });
 

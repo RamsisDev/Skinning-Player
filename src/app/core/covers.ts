@@ -1,9 +1,10 @@
 import { Service, inject, signal } from '@angular/core';
 import { Storage } from '@ng-native/expo/async-storage';
 import { DocumentPicker } from '@ng-native/expo/document-picker';
-import { FileSystem, type NativeFile } from '@ng-native/expo/file-system';
-import { type ByteReader, embeddedCover } from './embedded-cover.ts';
-import { type EmbeddedPicture, imageExtension } from './id3-cover.ts';
+import { FileSystem } from '@ng-native/expo/file-system';
+import { readFile } from './byte-reader.ts';
+import { embeddedCover } from './embedded-cover.ts';
+import { imageExtension } from './id3-cover.ts';
 import { MusicLibrary } from './music-library.ts';
 import { type Track } from './track.ts';
 
@@ -12,11 +13,6 @@ export type CoverError = { readonly code: 'tooLarge' } | { readonly code: 'unrea
 export type CoverResult = { readonly ok: true } | { readonly ok: false; readonly error: CoverError };
 
 const MAX_IMAGE_BYTES = 10_000_000;
-
-/** Expo's file handle, which reads a file a piece at a time. Not in `NativeFile`'s slice of it. */
-interface ReadableFile extends NativeFile {
-  open?(): { readBytes(length: number): Uint8Array; close(): void; offset: number | null; size: number | null };
-}
 
 const fileSafe = (id: string): string => id.replace(/[^\w-]/g, '_');
 
@@ -108,35 +104,10 @@ export class Covers {
   }
 
   private async extract(track: Track): Promise<string | null> {
-    const picture = await this.readCover(await this.library.uriOf(track));
+    const picture = await readFile(this.files, await this.library.uriOf(track), embeddedCover);
     if (!picture) return null;
     const file = this.files.cache(`covers/embedded-${fileSafe(track.id)}.${imageExtension(picture.mime)}`);
     this.files.write(file, picture.data);
     return file.uri;
   }
-
-  /** The art embedded in the file, read a piece at a time without loading the audio. */
-  private async readCover(uri: string): Promise<EmbeddedPicture | null> {
-    const file = this.files.file(uri) as ReadableFile;
-    if (!file.open) return embeddedCover(bytesReader(await file.bytes()));
-    const handle = file.open();
-    try {
-      const size = handle.size ?? 0;
-      return embeddedCover({
-        size,
-        read(offset, length) {
-          const available = Math.min(length, size - offset);
-          if (available <= 0) return new Uint8Array(0);
-          handle.offset = offset;
-          return handle.readBytes(available);
-        },
-      });
-    } finally {
-      handle.close();
-    }
-  }
-}
-
-function bytesReader(bytes: Uint8Array): ByteReader {
-  return { size: bytes.length, read: (offset, length) => bytes.subarray(offset, offset + length) };
 }

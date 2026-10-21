@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatTime, matchesQuery, trackFromFile } from './track.ts';
+import { fold, formatTime, matchesQuery, trackFromFile, withTags } from './track.ts';
 
 describe('trackFromFile', () => {
   it('splits "Artist - Title" and drops the extension and track number', () => {
@@ -7,6 +7,9 @@ describe('trackFromFile', () => {
       id: '1',
       title: 'One More Time',
       artist: 'Daft Punk',
+      album: '',
+      genre: '',
+      year: '',
       filename: '03 - Daft Punk - One More Time.mp3',
       duration: 320,
     });
@@ -24,6 +27,18 @@ describe('trackFromFile', () => {
   });
 });
 
+describe('withTags', () => {
+  it('names the track by its tags, and keeps the file name for what they leave out', () => {
+    const track = withTags(trackFromFile('1', 'Bipolar_spotdown.org.mp3', 240), {
+      title: 'Bipolar',
+      album: 'Raro',
+      year: '2006',
+    });
+    expect(track).toMatchObject({ title: 'Bipolar', artist: '', album: 'Raro', genre: '', year: '2006' });
+    expect(withTags(trackFromFile('2', 'Queen - Bohemian Rhapsody.mp3', 354), {}).artist).toBe('Queen');
+  });
+});
+
 it('formats times as m:ss and h:mm:ss', () => {
   expect(formatTime(0)).toBe('0:00');
   expect(formatTime(65.9)).toBe('1:05');
@@ -38,4 +53,20 @@ it('matches a search on title, artist or file name', () => {
   expect(matchesQuery(track, '.mp3')).toBe(true);
   expect(matchesQuery(track, 'abba')).toBe(false);
   expect(matchesQuery(track, '  ')).toBe(true);
+});
+
+it('matches every word of a search across the album, genre and year too, with or without accents', () => {
+  const track = withTags(trackFromFile('1', 'track01.mp3', 250), {
+    title: 'De Música Ligera',
+    artist: 'Soda Stereo',
+    album: 'Canción Animal',
+    genre: 'Rock en Español',
+    year: '1990',
+  });
+  expect(matchesQuery(track, 'musica')).toBe(true);
+  expect(matchesQuery(track, 'CANCION animal')).toBe(true);
+  expect(matchesQuery(track, 'soda 1990')).toBe(true);
+  expect(matchesQuery(track, 'espanol')).toBe(true);
+  expect(matchesQuery(track, 'soda 1991')).toBe(false);
+  expect(fold('Él Ñandú')).toBe('el nandu');
 });

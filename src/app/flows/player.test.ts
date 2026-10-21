@@ -408,7 +408,7 @@ test('marks the playing song in the library and follows it as the mini player sk
 
 test('plays only the songs found by a search', async () => {
   const { engine, user } = await start();
-  await user.type(screen.getByPlaceholderText('Search songs or artists'), 'band');
+  await user.type(screen.getByPlaceholderText('Search songs, artists or albums'), 'band');
   expect(await screen.findByText('2 of 3 songs')).toBeTruthy();
 
   await playFromLibrary(user, 'Breeze, Bravo Band');

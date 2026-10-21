@@ -34,7 +34,7 @@ test('speaks Spanish on a phone set to Spanish, plurals included', async () => {
 
   expect(await screen.findByText('2 canciones')).toBeTruthy();
   expect(screen.getByRole('tab', { name: 'Biblioteca' })).toBeTruthy();
-  expect(screen.getByPlaceholderText('Buscar canciones o artistas')).toBeTruthy();
+  expect(screen.getByPlaceholderText('Buscar canciones, artistas o álbumes')).toBeTruthy();
   const interlude = screen.getByRole('button', { name: 'Interlude' });
   expect(within(interlude).getByText('Artista desconocido  ·  1:15')).toBeTruthy();
   expect(screen.getByText('Nada en reproducción')).toBeTruthy();

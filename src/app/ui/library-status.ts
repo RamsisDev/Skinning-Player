@@ -81,13 +81,16 @@ export class LibraryStatus {
   private readonly skins = inject(SkinManager);
   protected readonly t = inject(I18n).messages;
   protected readonly accent = computed(() => this.skins.active().colors.accent);
-  protected readonly heading = computed(() =>
-    this.library.step() === 'indexing' ? this.t().status.indexing : this.t().status.reading,
-  );
+  protected readonly heading = computed(() => {
+    const t = this.t().status;
+    const step = this.library.step();
+    return step === 'indexing' ? t.indexing : step === 'tagging' ? t.tagging : t.reading;
+  });
   protected readonly progress = computed(() => {
     const t = this.t().status;
     const found = this.library.found();
     if (this.library.step() === 'indexing') return t.sorting(found);
+    if (this.library.step() === 'tagging') return t.tagged(this.library.tagged(), found);
     return found ? t.found(found) : t.looking;
   });
 

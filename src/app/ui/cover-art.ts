@@ -15,8 +15,10 @@ import { SkinIcon } from './skin-icon.ts';
   template: `
     <view
       class="art"
+      [class.skin-corners]="radius() === null"
       [style.width.px]="size()"
       [style.height.px]="size()"
+      [style.border-radius.px]="radius()"
       role="image"
       [accessibilityLabel]="label()"
     >
@@ -32,10 +34,12 @@ import { SkinIcon } from './skin-icon.ts';
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      border-radius: var(--sk-widget-radius);
       border-width: var(--sk-border-width);
       border-color: var(--sk-widget-border);
       background-color: var(--sk-display-background);
+    }
+    .skin-corners {
+      border-radius: var(--sk-widget-radius);
     }
     .image {
       width: 100%;
@@ -49,6 +53,8 @@ export class CoverArt {
 
   readonly track = input<Track | null>(null);
   readonly size = input(64);
+  /** Corners in points, in place of the skin's widget radius: a thumbnail stays a square. */
+  readonly radius = input<number | null>(null);
 
   protected readonly failed = signal<string | null>(null);
   protected readonly shown = computed(() => {

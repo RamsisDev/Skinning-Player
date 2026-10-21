@@ -25,7 +25,7 @@ import { TrackRow } from '../ui/track-row.ts';
       <virtual-list #list class="list" [items]="candidates()" [itemHeight]="60" [keyExtractor]="idOf" keyboardShouldPersistTaps="handled">
         @for (row of list.window(); track row.slot) {
           <view [virtualListRow]="row">
-            <app-track-row [track]="row.item" [number]="row.index + 1" [selected]="selected().has(row.item.id)" (press)="toggle(row.item)">
+            <app-track-row [track]="row.item" [selected]="selected().has(row.item.id)" (press)="toggle(row.item)">
               @if (selected().has(row.item.id)) {
                 <app-skin-icon slot="check" [size]="22" color="var(--sk-accent)" />
               }

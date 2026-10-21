@@ -1,6 +1,15 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Text, TextInput, View, VirtualList, VirtualListRow } from '@ng-native/components';
+import { ScrollView, Text, TextInput, View, VirtualList, VirtualListRow } from '@ng-native/components';
 import { Dialogs } from '@ng-native/device';
+import {
+  FACETS,
+  type Facet,
+  type Filters,
+  facetOptions,
+  hasFilters,
+  matchesFilters,
+  valuesOf,
+} from '../core/library-filter.ts';
 import { MusicLibrary } from '../core/music-library.ts';
 import { Player } from '../core/player.ts';
 import { type Track, matchesQuery } from '../core/track.ts';
@@ -13,14 +22,31 @@ import { SkinIcon } from '../ui/skin-icon.ts';
 import { TrackRow } from '../ui/track-row.ts';
 import { AddToPlaylistSheet } from './add-to-playlist-sheet.ts';
 import { CoverSheet } from './cover-sheet.ts';
+import { FilterSheet } from './filter-sheet.ts';
 
 /**
- * Every song on the device, searchable. A tap plays from that song and opens the player; a long
+ * Every song on the device, searchable and filtered by the details its songs have: a filter for
+ * each of artist, album, genre and year the library knows, offering only the values left among the
+ * songs on show. A tap plays from that song and opens the player; a long
  * press files it; its menu also sets its cover.
  */
 @Component({
   selector: 'app-library-screen',
-  imports: [AddToPlaylistSheet, CoverSheet, LibraryStatus, SkinButton, SkinIcon, Text, TextInput, TrackRow, View, VirtualList, VirtualListRow],
+  imports: [
+    AddToPlaylistSheet,
+    CoverSheet,
+    FilterSheet,
+    LibraryStatus,
+    ScrollView,
+    SkinButton,
+    SkinIcon,
+    Text,
+    TextInput,
+    TrackRow,
+    View,
+    VirtualList,
+    VirtualListRow,
+  ],
   host: { style: 'flex: 1' },
   template: `
     @if (library.status() === 'ready') {
@@ -38,6 +64,16 @@ import { CoverSheet } from './cover-sheet.ts';
         </view>
         <app-skin-button [label]="t().library.rescan" icon="refresh" [iconOnly]="true" (press)="library.scan()" />
       </view>
+      @if (chips().length) {
+        <scroll-view class="filters" [horizontal]="true" [contentContainerStyle]="{ paddingHorizontal: 12, gap: 8 }" keyboardShouldPersistTaps="handled">
+          @for (chip of chips(); track chip.facet) {
+            <app-skin-button [label]="chip.label" size="small" [active]="chip.active" (press)="picking.set(chip.facet)" />
+          }
+          @if (filtered()) {
+            <app-skin-button [label]="t().filters.clear" variant="ghost" size="small" (press)="filters.set({})" />
+          }
+        </scroll-view>
+      }
       <view class="actions">
         <text class="count">{{ countLabel() }}</text>
         <app-skin-button [label]="t().common.shuffle" icon="shuffle" size="small" [disabled]="!visible().length" (press)="shuffleAll()" />
@@ -48,7 +84,6 @@ import { CoverSheet } from './cover-sheet.ts';
           <view [virtualListRow]="row">
             <app-track-row
               [track]="row.item"
-              [number]="row.index + 1"
               [current]="player.current()?.id === row.item.id"
               (press)="play(row.index)"
               (longPress)="adding.set(row.item)"
@@ -73,6 +108,13 @@ import { CoverSheet } from './cover-sheet.ts';
     }
     <app-add-to-playlist-sheet [track]="adding()" (close)="adding.set(null)" />
     <app-cover-sheet [track]="editingCover()" (close)="editingCover.set(null)" />
+    <app-filter-sheet
+      [facet]="picking()"
+      [options]="pickerOptions()"
+      [selected]="pickerSelected()"
+      (pick)="pick($event)"
+      (close)="picking.set(null)"
+    />
   `,
   styles: `
     .toolbar {
@@ -100,6 +142,10 @@ import { CoverSheet } from './cover-sheet.ts';
       font-family: var(--sk-font);
       font-size: var(--sk-font-md);
       font-weight: var(--sk-weight);
+    }
+    .filters {
+      flex-grow: 0;
+      padding: 4px 0;
     }
     .actions {
       flex-direction: row;
@@ -140,9 +186,46 @@ export class LibraryScreen {
   protected readonly adding = signal<Track | null>(null);
   protected readonly editingCover = signal<Track | null>(null);
   protected readonly colors = computed(() => this.skins.active().colors);
-  protected readonly visible = computed(() => {
+  protected readonly filters = signal<Filters>({});
+  /** The detail whose filter sheet is open. */
+  protected readonly picking = signal<Facet | null>(null);
+  protected readonly filtered = computed(() => hasFilters(this.filters()));
+  private readonly searched = computed(() => {
     const query = this.query();
     return this.library.tracks().filter((track) => matchesQuery(track, query));
+  });
+  protected readonly visible = computed(() => {
+    const filters = this.filters();
+    return this.searched().filter((track) => matchesFilters(track, filters));
+  });
+  /** Each detail's values across the whole library, by key: a library without genres offers no genre filter. */
+  private readonly known = computed(() => {
+    const tracks = this.library.tracks();
+    return FACETS.flatMap((facet) => {
+      if (!tracks.some((track) => valuesOf(track, facet).length)) return [];
+      const labels = new Map(facetOptions(tracks, facet).map((option) => [option.key, option.label]));
+      return [{ facet, labels }];
+    });
+  });
+  protected readonly chips = computed(() => {
+    const t = this.t().filters;
+    const filters = this.filters();
+    return this.known().map(({ facet, labels }) => {
+      const key = filters[facet];
+      const value = key && (labels.get(key) ?? key);
+      return { facet, active: !!value, label: value ? t.chip(t[facet], value) : t[facet] };
+    });
+  });
+  /** The open filter's values among the songs the search and the other filters leave. */
+  protected readonly pickerOptions = computed(() => {
+    const facet = this.picking();
+    if (!facet) return [];
+    const filters = this.filters();
+    return facetOptions(this.searched().filter((track) => matchesFilters(track, filters, facet)), facet);
+  });
+  protected readonly pickerSelected = computed(() => {
+    const facet = this.picking();
+    return facet ? this.filters()[facet] : undefined;
   });
   protected readonly countLabel = computed(() =>
     this.t().library.count(this.visible().length, this.library.tracks().length),
@@ -157,8 +240,16 @@ export class LibraryScreen {
   }
 
   protected play(index: number): void {
-    this.player.playTracks(this.visible(), index, this.query().trim() ? 'search' : 'library');
+    this.player.playTracks(this.visible(), index, this.query().trim() || this.filtered() ? 'search' : 'library');
     this.playerView.show();
+  }
+
+  /** Filters by the key picked in the open sheet, or lifts its filter for null. */
+  protected pick(key: string | null): void {
+    const facet = this.picking();
+    if (!facet) return;
+    this.filters.update(({ [facet]: _, ...rest }) => (key ? { ...rest, [facet]: key } : rest));
+    this.picking.set(null);
   }
 
   protected async more(track: Track): Promise<void> {

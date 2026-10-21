@@ -1,8 +1,14 @@
+import { type Tags } from './embedded-tags.ts';
+
 /** One audio file found on the device. `id` is the media store's asset id. */
 export interface Track {
   readonly id: string;
   readonly title: string;
   readonly artist: string;
+  /** Empty when the file does not say, as are the genre and the year. */
+  readonly album: string;
+  readonly genre: string;
+  readonly year: string;
   readonly filename: string;
   /** Seconds, or 0 when the media store does not know. */
   readonly duration: number;
@@ -13,8 +19,8 @@ const EXTENSION = /\.[a-z0-9]{2,5}$/i;
 const TRACK_NUMBER = /^\d{1,3}\s*[-.]\s*/;
 
 /**
- * Tracks are named from their file: the media store has no ID3 tags to offer. "Artist - Title.mp3"
- * is the common convention, so a dash splits the two; anything else is all title.
+ * A track named from its file, until its tags are read. "Artist - Title.mp3" is the common
+ * convention, so a dash splits the two; anything else is all title.
  */
 export function trackFromFile(id: string, filename: string, duration: number | null): Track {
   const base = filename.replace(EXTENSION, '').replace(/_/g, ' ').trim();
@@ -26,8 +32,23 @@ export function trackFromFile(id: string, filename: string, duration: number | n
     id,
     title: title || base || filename,
     artist,
+    album: '',
+    genre: '',
+    year: '',
     filename,
     duration: duration && duration > 0 ? duration : 0,
+  };
+}
+
+/** The track as its file's tags name it; what they leave out keeps the name from the file. */
+export function withTags(track: Track, tags: Tags): Track {
+  return {
+    ...track,
+    title: tags.title || track.title,
+    artist: tags.artist || track.artist,
+    album: tags.album || track.album,
+    genre: tags.genre || track.genre,
+    year: tags.year || track.year,
   };
 }
 
@@ -47,12 +68,32 @@ export function byTitle(a: Track, b: Track): number {
   return titles.compare(a.title, b.title);
 }
 
+/**
+ * Lowercase and without accents, so that "musica" finds "Música". Hermes without Intl has no
+ * `normalize`, and then only the case is folded.
+ */
+export function fold(text: string): string {
+  const lower = text.toLowerCase();
+  try {
+    return lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  } catch {
+    return lower;
+  }
+}
+
+/** Each track's searchable text, folded once rather than on every keystroke. */
+const searchText = new WeakMap<Track, string>();
+
+/** Whether every word of the query is in the track's title, artist, album, genre, year or file name. */
 export function matchesQuery(track: Track, query: string): boolean {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return true;
-  return (
-    track.title.toLowerCase().includes(needle) ||
-    track.artist.toLowerCase().includes(needle) ||
-    track.filename.toLowerCase().includes(needle)
-  );
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const text = searchText.get(track) ?? indexText(track);
+  return words.every((word) => text.includes(word));
+}
+
+function indexText(track: Track): string {
+  const text = fold([track.title, track.artist, track.album, track.genre, track.year, track.filename].join('\n'));
+  searchText.set(track, text);
+  return text;
 }

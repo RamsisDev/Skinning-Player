@@ -4,15 +4,16 @@ import { Dialogs } from '@ng-native/device';
 import { type FailureReason, Player } from '../core/player.ts';
 import { type Track, formatTime } from '../core/track.ts';
 import { I18n } from '../i18n/i18n.ts';
+import { CoverArt } from './cover-art.ts';
 import { SkinIcon } from './skin-icon.ts';
 
 /**
- * One track in a list. Trailing buttons are projected, and win the press over the row. A track
- * that failed to play carries a warning that explains why.
+ * One track in a list, led by a thumbnail of its cover. Trailing buttons are projected, and win
+ * the press over the row. A track that failed to play carries a warning that explains why.
  */
 @Component({
   selector: 'app-track-row',
-  imports: [Pressable, SkinIcon, Text, View],
+  imports: [CoverArt, Pressable, SkinIcon, Text, View],
   host: { style: 'flex: 1' },
   template: `
     <pressable
@@ -25,7 +26,7 @@ import { SkinIcon } from './skin-icon.ts';
       (press)="press.emit()"
       (longPress)="longPress.emit()"
     >
-      <text class="number" [numberOfLines]="1">{{ number() }}</text>
+      <app-cover-art [track]="track()" [size]="44" [radius]="6" />
       <view class="body">
         <text class="title" [numberOfLines]="1">{{ track().title }}</text>
         <text class="meta" [numberOfLines]="1">{{ meta() }}</text>
@@ -67,15 +68,6 @@ import { SkinIcon } from './skin-icon.ts';
     .selected {
       background-color: var(--sk-surface-alt);
     }
-    .number {
-      width: 28px;
-      color: var(--sk-text-muted);
-      font-family: var(--sk-display-font);
-      font-size: var(--sk-font-xs);
-      font-weight: var(--sk-display-weight);
-      text-align: right;
-    }
-    .current .number,
     .current .title {
       color: var(--sk-accent);
     }
@@ -109,15 +101,14 @@ export class TrackRow {
   private readonly t = inject(I18n).messages;
 
   readonly track = input.required<Track>();
-  readonly number = input<number | string>('');
   readonly current = input(false);
   readonly selected = input(false);
   readonly press = output<void>();
   readonly longPress = output<void>();
 
   protected readonly meta = computed(() => {
-    const { artist, duration } = this.track();
-    return [artist || this.t().common.unknownArtist, duration ? formatTime(duration) : ''].filter(Boolean).join('  ·  ');
+    const { artist, album, duration } = this.track();
+    return [artist || this.t().common.unknownArtist, album, duration ? formatTime(duration) : ''].filter(Boolean).join('  ·  ');
   });
   protected readonly accessibleName = computed(() => {
     const { title, artist } = this.track();

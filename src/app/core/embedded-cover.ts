@@ -3,14 +3,8 @@
  * and some FLAC files), a FLAC PICTURE block, the `id3 ` chunk of a WAV, or the `covr` atom of
  * an MP4 (M4A, AAC). Other files (Ogg, Opus) have none this can read.
  */
-import { type EmbeddedPicture, FRONT_COVER, coverFromId3, id3TagSize, mimeOf } from './id3-cover.ts';
-
-/** Random access to a file, so the audio between the pieces that matter is never loaded. */
-export interface ByteReader {
-  readonly size: number;
-  /** Up to `length` bytes from `offset`, fewer past the end of the file. */
-  read(offset: number, length: number): Uint8Array;
-}
+import { type ByteReader } from './byte-reader.ts';
+import { type EmbeddedPicture, FRONT_COVER, coverFromFrames, coverFromId3, id3Frames, id3TagSize, mimeOf } from './id3-cover.ts';
 
 /** Past this, a tag or block is more likely corrupt than a cover worth reading. */
 const MAX_PICTURE_BYTES = 16_000_000;
@@ -27,7 +21,7 @@ export function embeddedCover(file: ByteReader): EmbeddedPicture | null {
   const tagSize = id3TagSize(file.read(0, 10));
   if (tagSize) {
     if (tagSize > MAX_PICTURE_BYTES) return null;
-    const picture = coverFromId3(file.read(0, 10 + tagSize));
+    const picture = coverFromFrames(id3Frames(file));
     if (picture) return picture;
     at = 10 + tagSize;
   }
@@ -100,13 +94,13 @@ function mp4Cover(file: ByteReader, at: number): EmbeddedPicture | null {
   return image.length ? { mime, data: image } : null;
 }
 
-interface Box {
+export interface Box {
   readonly start: number;
   readonly end: number;
 }
 
 /** The body of the first box of `type` between `from` and `to`. */
-function findBox(file: ByteReader, from: number, to: number, type: string): Box | null {
+export function findBox(file: ByteReader, from: number, to: number, type: string): Box | null {
   let at = from;
   while (at + 8 <= to) {
     const header = file.read(at, 16);

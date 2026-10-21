@@ -52,6 +52,22 @@ English defines the shape: a Spanish string missing, or taking different argumen
 typecheck. The phone's language is read through `expo-localization`, so a development build made
 before it was added needs rebuilding (`npm run android`); until then the app starts in English.
 
+## Song details, search and filters
+
+Each song is named by its file's tags: title, artist, album, genre and year, from an ID3v2 or
+ID3v1 tag (MP3, and a WAV's `id3 ` chunk), a WAV's LIST INFO chunk, a FLAC or Ogg (Vorbis, Opus)
+stream's comments, or an M4A's iTunes atoms. Android's media store answers only file names, so
+the scan reads the tags from each file, only their headers and text; a file without tags is
+named from its file name ("Artist - Title.mp3"). Tags are kept in the cache with each file's
+modification time, so a rescan reads only the files that are new or changed.
+
+The search matches every word typed against the title, artist, album, genre, year and file name,
+ignoring case and accents ("musica" finds "Música"). Under it, a filter for each detail the
+library has values for (a library without genres offers no genre filter) lists the values left
+among the songs on show, with how many songs have each; filters combine with each other and the
+search. A song by "Mon Laferte, Juanes" counts for both artists; "&" and "/" are left alone, so
+"Simon & Garfunkel" and "AC/DC" stay whole.
+
 ## Covers
 
 A tap on a song plays it and opens the full player, with the song's cover as large as fits. The
