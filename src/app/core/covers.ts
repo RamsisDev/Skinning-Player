@@ -5,8 +5,9 @@ import { FileSystem } from '@ng-native/expo/file-system';
 import { readFile } from './byte-reader.ts';
 import { embeddedCover } from './embedded-cover.ts';
 import { imageExtension } from './id3-cover.ts';
+import { LibrarySettings } from './library-settings.ts';
 import { MusicLibrary } from './music-library.ts';
-import { type Track } from './track.ts';
+import { type Track, folderOf } from './track.ts';
 
 export type CoverError = { readonly code: 'tooLarge' } | { readonly code: 'unreadable'; readonly file: string };
 
@@ -16,10 +17,20 @@ const MAX_IMAGE_BYTES = 10_000_000;
 
 const fileSafe = (id: string): string => id.replace(/[^\w-]/g, '_');
 
+/** The names a folder's own cover goes by, as most players look for them. */
+const FOLDER_COVER_NAMES = ['cover', 'folder', 'front', 'album', 'albumart'].flatMap((name) => [
+  name,
+  name[0]!.toUpperCase() + name.slice(1),
+]);
+const FOLDER_COVER_EXTENSIONS = ['jpg', 'jpeg', 'png'];
+
+/** The file:// uri of a path, each part of it encoded. */
+const uriOfPath = (path: string): string => `file://${path.split('/').map(encodeURIComponent).join('/')}`;
+
 /**
  * Each track's cover: one the user chose, kept in the app's documents, or else the art embedded
- * in the file, read once and kept in the cache. A track with neither has none, and is drawn
- * with a placeholder.
+ * in the file, read once and kept in the cache, or else, once the user turns it on, an image such
+ * as cover.jpg in the song's folder. A track with none is drawn with a placeholder.
  */
 @Service()
 export class Covers {
@@ -27,24 +38,32 @@ export class Covers {
   private readonly files = inject(FileSystem);
   private readonly picker = inject(DocumentPicker);
   private readonly library = inject(MusicLibrary);
+  private readonly settings = inject(LibrarySettings);
 
   /** Track id to the image file the user chose for it. */
   private readonly custom = this.store.signal<Record<string, string>>('covers.custom', {});
   /** Track id to its embedded art's cached file, or null for a file with none. */
   private readonly embedded = signal<ReadonlyMap<string, string | null>>(new Map());
   private readonly reading = new Set<string>();
+  /** Folder path to its cover image's uri, or null for a folder with none. */
+  private readonly folderArt = signal<ReadonlyMap<string, string | null>>(new Map());
 
   /** The image to draw for a track, or null for the placeholder. */
   uriOf(trackId: string): string | null {
-    return this.custom()[trackId] ?? this.embedded().get(trackId) ?? null;
+    const own = this.custom()[trackId] ?? this.embedded().get(trackId);
+    if (own || !this.settings.folderCovers()) return own ?? null;
+    const track = this.library.byId().get(trackId);
+    return (track && this.folderArt().get(folderOf(track))) ?? null;
   }
 
   hasCustom(trackId: string): boolean {
     return trackId in this.custom();
   }
 
-  /** Looks for the track's embedded art, once; `uriOf` follows when it is found. */
+  /** Looks for the track's embedded art and its folder's, once; `uriOf` follows when it is found. */
   async load(track: Track): Promise<void> {
+    // Read before anything is awaited, so that a caller in an effect loads again once it is turned on.
+    if (this.settings.folderCovers()) this.loadFolder(track);
     if (this.embedded().has(track.id) || this.reading.has(track.id)) return;
     this.reading.add(track.id);
     let uri: string | null = null;
@@ -55,6 +74,27 @@ export class Covers {
     }
     this.reading.delete(track.id);
     this.embedded.update((known) => new Map(known).set(track.id, uri));
+  }
+
+  /** Looks for a cover image in the track's folder, once per folder. */
+  private loadFolder(track: Track): void {
+    const folder = folderOf(track);
+    if (!folder || this.folderArt().has(folder)) return;
+    let found: string | null = null;
+    try {
+      search: for (const name of FOLDER_COVER_NAMES) {
+        for (const ext of FOLDER_COVER_EXTENSIONS) {
+          const file = this.files.file(uriOfPath(`${folder}/${name}.${ext}`));
+          if (file.exists) {
+            found = file.uri;
+            break search;
+          }
+        }
+      }
+    } catch {
+      // A folder that cannot be looked in has no cover to offer.
+    }
+    this.folderArt.update((known) => new Map(known).set(folder, found));
   }
 
   /** Lets the user pick an image for the track. Null when the picker is canceled. */

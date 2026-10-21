@@ -2,19 +2,33 @@ import { Service, signal } from '@angular/core';
 import { type Filters } from '../core/library-filter.ts';
 import { type Tab } from './tab-menu.ts';
 
-/** Where a search result leads: the library filtered to an album, artist or genre, or a playlist. */
+/** The lists the library tab shows, as Auxio's tabs. */
+export const LIBRARY_VIEWS = ['songs', 'albums', 'artists', 'genres'] as const;
+export type LibraryView = (typeof LIBRARY_VIEWS)[number];
+
+/** An album, artist or genre, which opens on a screen of its own. */
+export interface CatalogRef {
+  readonly kind: 'album' | 'artist' | 'genre';
+  readonly key: string;
+}
+
+/** Where a search result leads: an album, artist or genre, the library filtered, or a playlist. */
 export type Destination =
-  | { readonly tab: 'library'; readonly filters: Filters }
+  | { readonly tab: 'library'; readonly filters?: Filters; readonly detail?: CatalogRef }
   | { readonly tab: 'playlists'; readonly playlistId: string };
 
 /**
- * The tab on show, and the search that covers the tabs while it is open. Leaving the search for one
- * of its results keeps what was typed, so back returns to the search as it was, as in Auxio.
+ * The tab on show, and the search or settings that cover the tabs while they are open. Leaving the
+ * search for one of its results keeps what was typed, so back returns to the search as it was, as
+ * in Auxio.
  */
 @Service()
 export class Navigation {
   readonly tab = signal<Tab>('library');
+  /** Which of its lists the library tab shows; kept while the tab is left. */
+  readonly libraryView = signal<LibraryView>('songs');
   readonly searching = signal(false);
+  readonly settingsOpen = signal(false);
   readonly query = signal('');
   /** Whether the screen on show was opened from the search, which back returns to. */
   readonly fromSearch = signal(false);
@@ -24,6 +38,7 @@ export class Navigation {
   openSearch(): void {
     this.query.set('');
     this.fromSearch.set(false);
+    this.settingsOpen.set(false);
     this.searching.set(true);
   }
 
@@ -38,8 +53,18 @@ export class Navigation {
     this.fromSearch.set(false);
   }
 
+  openSettings(): void {
+    this.closeSearch();
+    this.settingsOpen.set(true);
+  }
+
+  closeSettings(): void {
+    this.settingsOpen.set(false);
+  }
+
   selectTab(tab: Tab): void {
     this.closeSearch();
+    this.closeSettings();
     this.tab.set(tab);
   }
 

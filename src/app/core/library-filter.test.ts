@@ -6,18 +6,18 @@ import { type Track, trackFromFile, withTags } from './track.ts';
 const song = (id: string, tags: Tags): Track => withTags(trackFromFile(id, `${id}.mp3`, 200), tags);
 
 const library = [
-  song('1', { title: 'A Dios Le Pido', artist: 'Juanes', album: 'Un Día Normal', year: '2002' }),
-  song('2', { title: 'Amárrame', artist: 'Mon Laferte, Juanes', album: 'La Trenza', year: '2017' }),
-  song('3', { title: 'Al Cielo No', artist: 'El Cuarteto De Nos', album: 'Canciones del Corazón', year: '2007' }),
-  song('4', { title: 'Así Soy Yo', artist: 'El Cuarteto de Nos', album: 'Raro', year: '2006' }),
+  song('1', { title: 'A Dios Le Pido', artists: ['Juanes'], album: 'Un Día Normal', date: '2002' }),
+  song('2', { title: 'Amárrame', artists: ['Mon Laferte, Juanes'], album: 'La Trenza', date: '2017' }),
+  song('3', { title: 'Al Cielo No', artists: ['El Cuarteto De Nos'], album: 'Canciones del Corazón', date: '2007' }),
+  song('4', { title: 'Así Soy Yo', artists: ['El Cuarteto de Nos'], album: 'Raro', date: '2006' }),
   song('5', { title: 'Untagged' }),
 ];
 
 it('counts each artist of a song by several, and leaves names with "&" or "/" whole', () => {
   expect(valuesOf(library[1]!, 'artist')).toEqual(['Mon Laferte', 'Juanes']);
-  expect(valuesOf(song('6', { artist: 'Simon & Garfunkel' }), 'artist')).toEqual(['Simon & Garfunkel']);
-  expect(valuesOf(song('7', { artist: 'AC/DC' }), 'artist')).toEqual(['AC/DC']);
-  expect(valuesOf(song('8', { artist: 'Bad Bunny feat. Drake' }), 'artist')).toEqual(['Bad Bunny', 'Drake']);
+  expect(valuesOf(song('6', { artists: ['Simon & Garfunkel'] }), 'artist')).toEqual(['Simon & Garfunkel']);
+  expect(valuesOf(song('7', { artists: ['AC/DC'] }), 'artist')).toEqual(['AC/DC']);
+  expect(valuesOf(song('8', { artists: ['Bad Bunny feat. Drake'] }), 'artist')).toEqual(['Bad Bunny', 'Drake']);
   expect(valuesOf(library[4]!, 'album')).toEqual([]);
 });
 

@@ -34,7 +34,8 @@
         "expo-media-library",
         {
           "granularPermissions": [
-            "audio"
+            "audio",
+            "photo"
           ],
           "photosPermission": "Allow Skinning Player to read the music on this device.",
           "savePhotosPermission": false

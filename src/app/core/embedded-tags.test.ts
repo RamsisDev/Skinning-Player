@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { embeddedTags } from './embedded-tags.ts';
+import { embeddedTags, parseDate } from './embedded-tags.ts';
 
 const bytes = (...parts: (string | number[] | Uint8Array)[]): Uint8Array => {
   const chunks = parts.map((part) =>
@@ -87,10 +87,10 @@ describe('embeddedTags', () => {
       ),
       mpegFrame,
     );
-    expect(tagsOf(file)).toEqual({ title: 'Café Tacvba', artist: 'Juanes', album: 'Un Día Normal', genre: 'Rock', year: '2002' });
+    expect(tagsOf(file)).toEqual({ title: 'Café Tacvba', artists: ['Juanes'], album: 'Un Día Normal', genres: ['Rock'], date: '2002' });
   });
 
-  it('joins the values of a 2.4 field, and keeps the year of a full date', () => {
+  it('keeps each value of a 2.4 field, and the whole of a full date', () => {
     const file = bytes(
       id3(
         4,
@@ -101,13 +101,13 @@ describe('embeddedTags', () => {
       ),
       mpegFrame,
     );
-    expect(tagsOf(file)).toEqual({ title: 'Amárrame', artist: 'Mon Laferte, Juanes', genre: 'Pop, Latin', year: '2017' });
+    expect(tagsOf(file)).toEqual({ title: 'Amárrame', artists: ['Mon Laferte', 'Juanes'], genres: ['Pop', 'Latin'], date: '2017-03-01' });
   });
 
-  it('falls back to the album artist, and reads the three-letter frames of 2.2', () => {
+  it('reads the album artist, and the three-letter frames of 2.2', () => {
     const frame22 = (id: string, body: Uint8Array) => bytes(id, [0, 0, body.length], body);
     const file = bytes(id3(2, frame22('TT2', latin1Text('Rapture')), frame22('TP2', latin1Text('Blondie'))), mpegFrame);
-    expect(tagsOf(file)).toEqual({ title: 'Rapture', artist: 'Blondie' });
+    expect(tagsOf(file)).toEqual({ title: 'Rapture', albumArtists: ['Blondie'] });
   });
 
   it('fills what the ID3v2 tag leaves out from the ID3v1 tag, reading UTF-8 written as Latin-1', () => {
@@ -116,21 +116,21 @@ describe('embeddedTags', () => {
       mpegFrame,
       id3v1({ title: 'From v1', artist: 'Soda Stereo', album: [...utf8('Canción Animal')], year: '1990', genre: 17 }),
     );
-    expect(tagsOf(file)).toEqual({ title: 'From v2', artist: 'Soda Stereo', album: 'Canción Animal', genre: 'Rock', year: '1990' });
-    expect(tagsOf(bytes(mpegFrame, id3v1({ artist: 'Maná' })))).toEqual({ artist: 'Maná' });
+    expect(tagsOf(file)).toEqual({ title: 'From v2', artists: ['Soda Stereo'], album: 'Canción Animal', genres: ['Rock'], date: '1990' });
+    expect(tagsOf(bytes(mpegFrame, id3v1({ artist: 'Maná' })))).toEqual({ artists: ['Maná'] });
   });
 
-  it('reads the comments block of a FLAC, joining an artist named twice', () => {
+  it('reads the comments block of a FLAC, keeping both of an artist named twice', () => {
     const block = comments('TITLE=Vivir sin aire', 'artist=Maná', 'ARTIST=Guest', 'DATE=1992', 'GENRE=Rock en Español');
     const file = bytes('fLaC', [0], uint32(34).slice(1), new Uint8Array(34), [0x84], uint32(block.length).slice(1), block);
-    expect(tagsOf(file)).toEqual({ title: 'Vivir sin aire', artist: 'Maná, Guest', genre: 'Rock en Español', year: '1992' });
+    expect(tagsOf(file)).toEqual({ title: 'Vivir sin aire', artists: ['Maná', 'Guest'], genres: ['Rock en Español'], date: '1992' });
   });
 
   it('gathers the comments of an Opus stream from the pages that carry them', () => {
     const head = bytes('OpusHead', new Uint8Array(11));
     const tags = bytes('OpusTags', comments(`TITLE=${'Long '.repeat(80).trim()}`, 'ARTIST=Zoé', 'ALBUM=Reptilectric'));
     const tagsResult = tagsOf(oggPages([head, tags, bytes('audio')], 1));
-    expect(tagsResult).toMatchObject({ artist: 'Zoé', album: 'Reptilectric' });
+    expect(tagsResult).toMatchObject({ artists: ['Zoé'], album: 'Reptilectric' });
     expect(tagsResult.title).toHaveLength(399);
   });
 
@@ -152,7 +152,7 @@ describe('embeddedTags', () => {
         ),
       ),
     );
-    expect(tagsOf(file)).toEqual({ title: 'Eres', artist: 'Café Tacvba', genre: 'Rock', year: '2003' });
+    expect(tagsOf(file)).toEqual({ title: 'Eres', albumArtists: ['Café Tacvba'], genres: ['Rock'], date: '2003-01-01' });
   });
 
   it('prefers the id3 chunk of a WAV over its LIST INFO chunk, which fills the rest', () => {
@@ -165,5 +165,122 @@ describe('embeddedTags', () => {
   it('answers nothing for a file with no tags', () => {
     expect(tagsOf(mpegFrame)).toEqual({});
     expect(tagsOf(new Uint8Array(0))).toEqual({});
+  });
+
+  it('reads the track and disc, album artist, original date, release type and sort names of a 2.4 tag', () => {
+    const text = (value: string) => bytes([3], utf8(value));
+    const file = bytes(
+      id3(
+        4,
+        frame24('TIT2', text('Bohemian Rhapsody')),
+        frame24('TPE1', text('Queen')),
+        frame24('TPE2', text('Queen')),
+        frame24('TRCK', text('11/12')),
+        frame24('TPOS', text('1/2')),
+        frame24('TDRC', text('2011-03-14')),
+        frame24('TDOR', text('1975-10-31')),
+        frame24('TXXX', text('MusicBrainz Album Type\0album\0live')),
+        frame24('TXXX', text('ignored description\0value')),
+        frame24('TSOP', text('Queen, The')),
+        frame24('TSOT', text('Bohemian')),
+        frame24('TCMP', text('1')),
+      ),
+      mpegFrame,
+    );
+    expect(tagsOf(file)).toEqual({
+      title: 'Bohemian Rhapsody',
+      artists: ['Queen'],
+      albumArtists: ['Queen'],
+      track: 11,
+      disc: 1,
+      date: '2011-03-14',
+      originalDate: '1975-10-31',
+      releaseTypes: ['album', 'live'],
+      artistSort: 'Queen, The',
+      titleSort: 'Bohemian',
+      compilation: true,
+    });
+  });
+
+  it('refines a 2.3 year by its day and month, and reads the track number of an ID3v1.1 tag', () => {
+    const file = bytes(id3(3, frame23('TYER', latin1Text('1997')), frame23('TDAT', latin1Text('2105'))), mpegFrame);
+    expect(tagsOf(file)).toEqual({ date: '1997-05-21' });
+    const v11 = id3v1({ title: 'Track' });
+    v11[3 + 30 + 30 + 30 + 4 + 28] = 0;
+    v11[3 + 30 + 30 + 30 + 4 + 29] = 7;
+    expect(tagsOf(bytes(mpegFrame, v11))).toEqual({ title: 'Track', track: 7 });
+  });
+
+  it('reads the numbers, album artist, original date and release type of FLAC comments', () => {
+    const block = comments(
+      'TITLE=Clocks',
+      'TRACKNUMBER=05',
+      'DISCNUMBER=1',
+      'ALBUMARTIST=Coldplay',
+      'ORIGINALDATE=2002',
+      'RELEASETYPE=single',
+      'ALBUMARTISTSORT=Coldplay',
+    );
+    const file = bytes('fLaC', [0x84], uint32(block.length).slice(1), block);
+    expect(tagsOf(file)).toEqual({
+      title: 'Clocks',
+      track: 5,
+      disc: 1,
+      albumArtists: ['Coldplay'],
+      originalDate: '2002',
+      releaseTypes: ['single'],
+      albumArtistSort: 'Coldplay',
+    });
+  });
+
+  it('reads the track and disc numbers, compilation flag, sort names and freeform fields of an M4A', () => {
+    const freeform = (name: string, value: string) =>
+      box('----', box('mean', uint32(0), 'com.apple.iTunes'), box('name', uint32(0), name), box('data', uint32(1), uint32(0), utf8(value)));
+    const number = (type: string, n: number) => box(type, box('data', uint32(0), uint32(0), [0, 0, 0, n, 0, 12, 0, 0]));
+    const file = bytes(
+      box('ftyp', 'M4A ', uint32(0)),
+      box(
+        'moov',
+        box(
+          'udta',
+          box(
+            'meta',
+            uint32(0),
+            box(
+              'ilst',
+              mp4Text('©nam', 'Song'),
+              number('trkn', 4),
+              number('disk', 2),
+              box('cpil', box('data', uint32(21), uint32(0), [1])),
+              mp4Text('soar', 'Beatles'),
+              freeform('MusicBrainz Album Type', 'ep'),
+              freeform('ORIGINALDATE', '1963-03-22'),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tagsOf(file)).toEqual({
+      title: 'Song',
+      track: 4,
+      disc: 2,
+      compilation: true,
+      artistSort: 'Beatles',
+      releaseTypes: ['ep'],
+      originalDate: '1963-03-22',
+    });
+  });
+});
+
+describe('parseDate', () => {
+  it('keeps a date as precise as it is written, and drops what is not a date', () => {
+    expect(parseDate('2004')).toBe('2004');
+    expect(parseDate('2004-05')).toBe('2004-05');
+    expect(parseDate('2004-05-12T10:00:00Z')).toBe('2004-05-12');
+    expect(parseDate('2004/05/12')).toBe('2004-05-12');
+    expect(parseDate('20040512')).toBe('2004-05-12');
+    expect(parseDate('2004-13-01')).toBe('2004');
+    expect(parseDate('0000')).toBeUndefined();
+    expect(parseDate('soon')).toBeUndefined();
   });
 });

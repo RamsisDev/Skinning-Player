@@ -108,13 +108,15 @@ test('narrows the results with filters that are kept for the next search', async
   expect(await screen.findByRole('button', { name: 'Rock, 2 artists  ·  2 songs' })).toBeTruthy();
 });
 
-test('opens an artist as the library filtered to their songs, and back returns to the search as it was', async () => {
+test('opens an artist on their own screen, and back returns to the search as it was', async () => {
   const { user, field, back } = await launch();
   await user.type(field, 'juan');
   await user.press(await screen.findByRole('button', { name: 'Juanes, 2 albums  ·  2 songs' }));
 
-  expect(await screen.findByText('2 of 4 songs')).toBeTruthy();
-  expect(stateOf(screen.getByRole('button', { name: 'Artist: Juanes' }))).toMatchObject({ selected: true });
+  expect(await screen.findByRole('heading', { name: 'Juanes' })).toBeTruthy();
+  expect(screen.getByText('2 albums  ·  2 songs  ·  6:51')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Un Día Normal, Album  ·  1 song' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'A Dios Le Pido, Juanes' })).toBeTruthy();
 
   expect(await back.press()).toBe(true);
   const restored = await screen.findByDisplayValue('juan');
@@ -151,8 +153,9 @@ test('queues a song to play next or at the end from its menu, and goes to its al
 
   await user.press(screen.getByRole('button', { name: 'More for Al Cielo No' }));
   await user.press(await screen.findByRole('button', { name: 'Go to album' }));
-  expect(await screen.findByText('1 of 4 songs')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Album: Canciones del Corazón' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Canciones del Corazón' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Go to El Cuarteto De Nos' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Al Cielo No, El Cuarteto De Nos' })).toBeTruthy();
 });
 
 test('asks which artist to go to for a song by several', async () => {
@@ -163,8 +166,8 @@ test('asks which artist to go to for a song by several', async () => {
 
   expect(await screen.findByRole('heading', { name: 'Go to artist' })).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Mon Laferte' }));
-  expect(await screen.findByText('1 of 4 songs')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Artist: Mon Laferte' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Mon Laferte' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'La Trenza, Album  ·  1 song' })).toBeTruthy();
 });
 
 test('selects with a long press, plays everything selected, and back clears a selection first', async () => {
