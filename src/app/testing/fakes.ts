@@ -120,9 +120,9 @@ export function fakeEngine(): FakeEngine {
   return {
     state: state.asReadonly(),
     loaded,
-    load(uri) {
+    load(uri, _info, play = true) {
       loaded.push(uri);
-      state.set({ ...state(), status: 'readyToPlay', playing: true, ended: false, currentTime: 0, duration: 200 });
+      state.set({ ...state(), status: 'readyToPlay', playing: play, ended: false, currentTime: 0, duration: 200 });
     },
     play: () => state.set({ ...state(), playing: true, ended: false }),
     pause: () => state.set({ ...state(), playing: false }),

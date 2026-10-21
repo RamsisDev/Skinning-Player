@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal, viewChild } from '@angular/core';
 import { Pressable, ScrollView, Text, TextInput, View, VirtualList, VirtualListRow } from '@ng-native/components';
 import { Dialogs, HardwareBack, Keyboard } from '@ng-native/device';
 import { Storage } from '@ng-native/expo/async-storage';
@@ -14,14 +14,14 @@ import { SkinManager } from '../skins/skin-manager.ts';
 import { CoverArt } from '../ui/cover-art.ts';
 import { LibraryStatus } from '../ui/library-status.ts';
 import { type Menu, type MenuAction, MenuSheet } from '../ui/menu-sheet.ts';
-import { Navigation } from '../ui/navigation.ts';
+import { type CatalogRef, Navigation } from '../ui/navigation.ts';
 import { PlayerView } from '../ui/player-view.ts';
 import { SkinButton } from '../ui/skin-button.ts';
 import { SkinIcon } from '../ui/skin-icon.ts';
 import { TrackRow } from '../ui/track-row.ts';
 import { AddToPlaylistSheet } from './add-to-playlist-sheet.ts';
-import { CoverSheet } from './cover-sheet.ts';
 import { NamePrompt } from './name-prompt.ts';
+import { SongMenu } from './song-menu.ts';
 
 const HEADER_HEIGHT = 40;
 const ROW_HEIGHT = 64;
@@ -37,7 +37,6 @@ const ROW_HEIGHT = 64;
   imports: [
     AddToPlaylistSheet,
     CoverArt,
-    CoverSheet,
     LibraryStatus,
     MenuSheet,
     NamePrompt,
@@ -45,6 +44,7 @@ const ROW_HEIGHT = 64;
     ScrollView,
     SkinButton,
     SkinIcon,
+    SongMenu,
     Text,
     TextInput,
     TrackRow,
@@ -171,7 +171,7 @@ const ROW_HEIGHT = 64;
     }
     <app-menu-sheet [menu]="menu()" (close)="menu.set(null)" />
     <app-add-to-playlist-sheet [tracks]="adding()" (close)="adding.set(null)" />
-    <app-cover-sheet [track]="editingCover()" (close)="editingCover.set(null)" />
+    <app-song-menu (open)="showDetail($event)" />
     <app-name-prompt
       [open]="!!renaming()"
       [title]="t().playlists.renamePlaylist"
@@ -318,7 +318,7 @@ export class SearchScreen {
   protected readonly selected = signal<ReadonlyMap<string, SearchRow>>(new Map());
   protected readonly menu = signal<Menu | null>(null);
   protected readonly adding = signal<readonly Track[] | null>(null);
-  protected readonly editingCover = signal<Track | null>(null);
+  private readonly songMenu = viewChild.required(SongMenu);
   protected readonly renaming = signal<Playlist | null>(null);
 
   protected readonly heightOf = (row: SearchRow): number => (row.kind === 'header' ? HEADER_HEIGHT : ROW_HEIGHT);
@@ -402,7 +402,7 @@ export class SearchScreen {
     this.keyboard.dismiss();
     if (row.kind === 'song') {
       const all = this.library.tracks();
-      this.player.playTracks(all, all.indexOf(row.track), 'library');
+      this.player.playFromList(all, all.indexOf(row.track), 'library');
       this.playerView.show();
     } else if (row.kind === 'group') {
       this.showGroup(row.group);
@@ -441,12 +441,7 @@ export class SearchScreen {
     const filing: MenuAction = { label: t.addToPlaylist, icon: 'addToPlaylist', run: () => this.adding.set(tracks) };
 
     if (row.kind === 'song') {
-      const { track } = row;
-      const actions = [...queueing];
-      if (track.artist) actions.push({ label: t.goToArtist, icon: 'library', run: () => this.goToArtist(tracks) });
-      if (track.album) actions.push({ label: t.goToAlbum, icon: 'library', run: () => this.showGroup(groupsOf(tracks, 'album')[0]) });
-      actions.push(filing, { label: t.changeCover, icon: 'cover', run: () => this.editingCover.set(track) });
-      this.menu.set({ title: track.title, actions });
+      this.songMenu().show(row.track);
     } else if (row.kind === 'group') {
       const actions = [...playing, ...queueing];
       if (row.group.facet === 'album' && tracks.some((track) => track.artist)) {
@@ -520,6 +515,10 @@ export class SearchScreen {
   private addToQueue(tracks: readonly Track[]): void {
     this.player.addToQueue(tracks);
     this.dialogs.notify(this.t().common.addedToQueue);
+  }
+
+  protected showDetail(ref: CatalogRef): void {
+    this.navigation.show({ tab: 'library', detail: ref });
   }
 
   /** Opens an album, artist or genre on its own screen, and a year as the library filtered to it. */

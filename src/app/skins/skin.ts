@@ -66,6 +66,11 @@ export const ICON_SLOTS = [
   'warning',
   'settings',
   'sort',
+  'queue',
+  'moveUp',
+  'moveDown',
+  'share',
+  'info',
 ] as const;
 export type IconSlot = (typeof ICON_SLOTS)[number];
 

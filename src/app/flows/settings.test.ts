@@ -193,3 +193,62 @@ test("shows the library's statistics", async () => {
   expect(screen.getByText('Total size')).toBeTruthy();
   expect(screen.getByText(/^\d+ B$/)).toBeTruthy();
 });
+
+const libraryViews = () =>
+  screen
+    .getAllByRole('tab')
+    .map((tab) => tab.props['accessibilityLabel'] as string)
+    .filter((name) => ['Songs', 'Albums', 'Artists', 'Genres'].includes(name));
+
+test('shows only the library tabs turned on, in the order chosen, keeping one on', async () => {
+  const { user } = await setup().launch();
+  await user.press(screen.getByRole('switch', { name: 'Songs' }));
+  await user.press(screen.getByRole('button', { name: 'Move Genres up' }));
+  await closeSettings(user);
+
+  expect(libraryViews()).toEqual(['Albums', 'Genres', 'Artists']);
+  // With songs hidden, the library opens on the first tab left.
+  expect(screen.getByRole('tab', { name: 'Albums' }).props['accessibilityState']).toMatchObject({ selected: true });
+
+  await user.press(screen.getByRole('button', { name: 'Settings' }));
+  for (const name of ['Albums', 'Genres', 'Artists']) await user.press(await screen.findByRole('switch', { name }));
+  expect(switchState('Artists')).toMatchObject({ checked: true });
+  await closeSettings(user);
+  // One tab alone needs no tabs to pick it.
+  expect(libraryViews()).toEqual([]);
+  expect(await screen.findByText('2 artists')).toBeTruthy();
+});
+
+test('plays a tapped song from its artist when the user asks for that, rather than from the list', async () => {
+  const library = setup();
+  const { user } = await library.launch();
+  library.files.push(['5', 'd.mp3', 100, 1]);
+  await user.press(screen.getByRole('button', { name: 'Rescan' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Rescan' }).props['accessibilityState']).toMatchObject({ disabled: false }));
+  expect(screen.getByText('The list')).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Its artist' }));
+  expect(screen.getByText("Plays the songs of the song's artist, newest first.")).toBeTruthy();
+  await closeSettings(user);
+
+  await user.press(await screen.findByRole('button', { name: 'La Camisa Negra, Juanes' }));
+  const player = () => {
+    let node = screen.getByRole('button', { name: 'Close player' });
+    while (node.parent && !/Modal/.test(node.viewName)) node = node.parent;
+    return within(node);
+  };
+  await user.press(player().getByRole('button', { name: 'Next' }));
+  expect(await screen.findByRole('heading', { name: 'Fotografía' })).toBeTruthy();
+  await user.press(player().getByRole('button', { name: 'Next' }));
+  expect(await screen.findByRole('heading', { name: 'La Camisa Negra' })).toBeTruthy();
+});
+
+test('puts the button the user chose after play in the mini player', async () => {
+  const { user } = await setup().launch();
+  await user.press(screen.getByRole('button', { name: 'Repeat mode' }));
+  await closeSettings(user);
+  const mini = () => within(screen.getByRole('button', { name: 'Open player' }).parent!);
+  expect(mini().queryByRole('button', { name: 'Next' })).toBeNull();
+
+  await user.press(mini().getByRole('button', { name: 'Repeat off' }));
+  expect(mini().getByRole('button', { name: 'Repeat all' }).props['accessibilityState']).toMatchObject({ selected: true });
+});

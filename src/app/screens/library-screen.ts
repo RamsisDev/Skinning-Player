@@ -1,6 +1,7 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { Pressable, ScrollView, Text, TextInput, View, VirtualList, VirtualListRow } from '@ng-native/components';
-import { Dialogs, HardwareBack } from '@ng-native/device';
+import { HardwareBack } from '@ng-native/device';
+import { BehaviorSettings } from '../core/behavior-settings.ts';
 import { LibrarySettings } from '../core/library-settings.ts';
 import {
   FACETS,
@@ -18,7 +19,7 @@ import { type Track, matchesQuery } from '../core/track.ts';
 import { I18n } from '../i18n/i18n.ts';
 import { SkinManager } from '../skins/skin-manager.ts';
 import { LibraryStatus } from '../ui/library-status.ts';
-import { type CatalogRef, LIBRARY_VIEWS, Navigation } from '../ui/navigation.ts';
+import { type CatalogRef, Navigation } from '../ui/navigation.ts';
 import { PlayerView } from '../ui/player-view.ts';
 import { SkinButton } from '../ui/skin-button.ts';
 import { SkinIcon } from '../ui/skin-icon.ts';
@@ -27,15 +28,16 @@ import { TrackRow } from '../ui/track-row.ts';
 import { AddToPlaylistSheet } from './add-to-playlist-sheet.ts';
 import { CatalogDetail } from './catalog-detail.ts';
 import { CatalogList } from './catalog-list.ts';
-import { CoverSheet } from './cover-sheet.ts';
 import { FilterSheet } from './filter-sheet.ts';
+import { SongMenu } from './song-menu.ts';
 
 /**
  * The library, in Auxio's tabs: its songs, albums, artists and genres. The songs are searchable,
  * sorted as the user chose and filtered by the details they have: a filter for each of artist,
  * album, genre and year the library knows, offering only the values left among the songs on show.
- * A tap on a song plays from it and opens the player; a long press files it; its menu also sets its
- * cover. An album, artist or genre opens on a screen of its own, which back leaves.
+ * The tabs on show and their order are the user's. A tap on a song plays from it, from the list or
+ * from what the user chose, and opens the player; a long press files it; its menu has the rest.
+ * An album, artist or genre opens on a screen of its own, which back leaves.
  */
 @Component({
   selector: 'app-library-screen',
@@ -43,13 +45,13 @@ import { FilterSheet } from './filter-sheet.ts';
     AddToPlaylistSheet,
     CatalogDetail,
     CatalogList,
-    CoverSheet,
     FilterSheet,
     LibraryStatus,
     Pressable,
     ScrollView,
     SkinButton,
     SkinIcon,
+    SongMenu,
     SortSheet,
     Text,
     TextInput,
@@ -65,21 +67,23 @@ import { FilterSheet } from './filter-sheet.ts';
     } @else if (detail(); as ref) {
       <app-catalog-detail [ref]="ref" (back)="leaveDetail()" (open)="openDetail($event)" />
     } @else {
-      <view class="views" role="tablist">
-        @for (view of views; track view) {
-          <pressable
-            class="view"
-            [class.active]="navigation.libraryView() === view"
-            role="tab"
-            [accessibilityLabel]="t().library.views[view]"
-            [accessibilityState]="{ selected: navigation.libraryView() === view }"
-            (press)="navigation.libraryView.set(view)"
-          >
-            <text class="view-label" [numberOfLines]="1">{{ t().library.views[view] }}</text>
-          </pressable>
-        }
-      </view>
-      @if (navigation.libraryView(); as view) {
+      @if (views().length > 1) {
+        <view class="views" role="tablist">
+          @for (view of views(); track view) {
+            <pressable
+              class="view"
+              [class.active]="view === shownView()"
+              role="tab"
+              [accessibilityLabel]="t().library.views[view]"
+              [accessibilityState]="{ selected: view === shownView() }"
+              (press)="navigation.libraryView.set(view)"
+            >
+              <text class="view-label" [numberOfLines]="1">{{ t().library.views[view] }}</text>
+            </pressable>
+          }
+        </view>
+      }
+      @if (shownView(); as view) {
         @if (view !== 'songs') {
           <app-catalog-list [view]="view" (open)="openDetail($event)" />
         } @else {
@@ -128,7 +132,7 @@ import { FilterSheet } from './filter-sheet.ts';
                     variant="ghost"
                     size="small"
                     [iconOnly]="true"
-                    (press)="more(row.item)"
+                    (press)="songMenu.show(row.item)"
                   />
                 </app-track-row>
               </view>
@@ -141,7 +145,7 @@ import { FilterSheet } from './filter-sheet.ts';
       }
     }
     <app-add-to-playlist-sheet [track]="adding()" (close)="adding.set(null)" />
-    <app-cover-sheet [track]="editingCover()" (close)="editingCover.set(null)" />
+    <app-song-menu #songMenu (open)="openDetail($event)" />
     <app-sort-sheet [open]="sorting()" [modes]="sortModes" [sort]="sort()" (change)="setSort($event)" (close)="sorting.set(false)" />
     <app-filter-sheet
       [facet]="picking()"
@@ -241,12 +245,18 @@ export class LibraryScreen {
   protected readonly player = inject(Player);
   private readonly skins = inject(SkinManager);
   private readonly playerView = inject(PlayerView);
-  private readonly dialogs = inject(Dialogs);
   private readonly settings = inject(LibrarySettings);
+  private readonly behavior = inject(BehaviorSettings);
   protected readonly navigation = inject(Navigation);
   protected readonly t = inject(I18n).messages;
 
-  protected readonly views = LIBRARY_VIEWS;
+  protected readonly views = this.behavior.shownViews;
+  /** The view picked, or the first on show once the one picked is hidden. */
+  protected readonly shownView = computed(() => {
+    const views = this.views();
+    const picked = this.navigation.libraryView();
+    return views.includes(picked) ? picked : views[0]!;
+  });
   private readonly opened = this.navigation.take('library');
   /** The albums, artists and genres opened, the one on show last. */
   private readonly details = signal<readonly CatalogRef[]>(this.opened?.detail ? [this.opened.detail] : []);
@@ -257,7 +267,6 @@ export class LibraryScreen {
 
   protected readonly query = signal('');
   protected readonly adding = signal<Track | null>(null);
-  protected readonly editingCover = signal<Track | null>(null);
   protected readonly colors = computed(() => this.skins.active().colors);
   /** Set when the search opened the library filtered. */
   protected readonly filters = signal<Filters>(this.opened?.filters ?? {});
@@ -342,7 +351,7 @@ export class LibraryScreen {
   }
 
   protected play(index: number): void {
-    this.player.playTracks(this.visible(), index, this.query().trim() || this.filtered() ? 'search' : 'library');
+    this.player.playFromList(this.visible(), index, this.query().trim() || this.filtered() ? 'search' : 'library');
     this.playerView.show();
   }
 
@@ -352,17 +361,6 @@ export class LibraryScreen {
     if (!facet) return;
     this.filters.update(({ [facet]: _, ...rest }) => (key ? { ...rest, [facet]: key } : rest));
     this.picking.set(null);
-  }
-
-  protected async more(track: Track): Promise<void> {
-    const t = this.t().common;
-    const choice = await this.dialogs.choose(track.title, [
-      { label: t.addToPlaylist },
-      { label: t.changeCover },
-      { label: t.cancel, style: 'cancel' },
-    ]);
-    if (choice === 0) this.adding.set(track);
-    if (choice === 1) this.editingCover.set(track);
   }
 
   protected shuffleAll(): void {

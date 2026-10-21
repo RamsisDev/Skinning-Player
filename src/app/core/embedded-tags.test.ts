@@ -126,6 +126,20 @@ describe('embeddedTags', () => {
     expect(tagsOf(file)).toEqual({ title: 'Vivir sin aire', artists: ['Maná', 'Guest'], genres: ['Rock en Español'], date: '1992' });
   });
 
+  it('reads the ReplayGain a tagger wrote, in an ID3 tag, FLAC comments or Opus R128 gains', () => {
+    const txxx = (description: string, value: string) => frame24('TXXX', bytes([3], utf8(`${description}\0${value}`)));
+    const mp3 = bytes(id3(4, txxx('replaygain_track_gain', '-7.89 dB'), txxx('REPLAYGAIN_ALBUM_GAIN', '+1.20 dB')), mpegFrame);
+    expect(tagsOf(mp3)).toEqual({ replayGain: { track: -7.89, album: 1.2 } });
+
+    const block = comments('REPLAYGAIN_TRACK_GAIN=-3.5 dB');
+    const flac = bytes('fLaC', [0], uint32(34).slice(1), new Uint8Array(34), [0x84], uint32(block.length).slice(1), block);
+    expect(tagsOf(flac)).toEqual({ replayGain: { track: -3.5 } });
+
+    // -2560 is -10 dB toward -23 LUFS, which is -5 dB toward ReplayGain's -18.
+    const opus = oggPages([bytes('OpusHead', new Uint8Array(11)), bytes('OpusTags', comments('R128_TRACK_GAIN=-2560'))], 1);
+    expect(tagsOf(opus)).toEqual({ replayGain: { track: -5 } });
+  });
+
   it('gathers the comments of an Opus stream from the pages that carry them', () => {
     const head = bytes('OpusHead', new Uint8Array(11));
     const tags = bytes('OpusTags', comments(`TITLE=${'Long '.repeat(80).trim()}`, 'ARTIST=Zoé', 'ALBUM=Reptilectric'));

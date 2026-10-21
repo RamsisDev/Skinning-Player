@@ -1,6 +1,7 @@
 import { Component, DestroyRef, computed, inject } from '@angular/core';
 import { ScrollView, Text, View } from '@ng-native/components';
 import { Dialogs, HardwareBack } from '@ng-native/device';
+import { BAR_ACTIONS, BehaviorSettings, PLAY_FROM } from '../core/behavior-settings.ts';
 import { CatalogService } from '../core/catalog.ts';
 import { type FolderMode, LibrarySettings } from '../core/library-settings.ts';
 import { locate } from '../core/library-content.ts';
@@ -13,7 +14,9 @@ import { SettingSwitch } from '../ui/setting-switch.ts';
 import { SkinButton } from '../ui/skin-button.ts';
 
 /**
- * How the library is read, as Auxio's "Music" and "Content" settings: rescanning, which files are
+ * How the app plays and looks: what a tap on
+ * a song plays, shuffle, repeat, skipping and pausing, the library's tabs and the mini player's
+ * button. Then how the library is read: rescanning, which files are
  * read, how tags are split and names sorted, folder covers; and what the library holds.
  */
 @Component({
@@ -26,6 +29,85 @@ import { SkinButton } from '../ui/skin-button.ts';
       <text class="heading" role="heading" [numberOfLines]="1">{{ t().settings.title }}</text>
     </view>
     <scroll-view class="list" [contentContainerStyle]="{ paddingBottom: 24 }">
+      <text class="section" role="header">{{ t().settings.playback }}</text>
+      <text class="label">{{ t().settings.playFrom }}</text>
+      <view class="buttons">
+        @for (from of playFrom; track from) {
+          <app-skin-button
+            [label]="t().settings.playFromModes[from]"
+            size="small"
+            [variant]="behavior.playFrom() === from ? 'primary' : 'normal'"
+            [active]="behavior.playFrom() === from"
+            (press)="behavior.playFrom.set(from)"
+          />
+        }
+      </view>
+      <text class="hint">{{ t().settings.playFromHint[behavior.playFrom()] }}</text>
+      <app-setting-switch
+        [label]="t().settings.rememberShuffle"
+        [hint]="t().settings.rememberShuffleHint"
+        [checked]="behavior.rememberShuffle()"
+        (toggle)="behavior.rememberShuffle.set(!behavior.rememberShuffle())"
+      />
+      <app-setting-switch
+        [label]="t().settings.rewindBeforeSkip"
+        [hint]="t().settings.rewindBeforeSkipHint"
+        [checked]="behavior.rewindBeforeSkip()"
+        (toggle)="behavior.rewindBeforeSkip.set(!behavior.rewindBeforeSkip())"
+      />
+      <app-setting-switch
+        [label]="t().settings.pauseOnRepeat"
+        [hint]="t().settings.pauseOnRepeatHint"
+        [checked]="behavior.pauseOnRepeat()"
+        (toggle)="behavior.pauseOnRepeat.set(!behavior.pauseOnRepeat())"
+      />
+      <app-setting-switch
+        [label]="t().settings.rememberPause"
+        [hint]="t().settings.rememberPauseHint"
+        [checked]="behavior.rememberPause()"
+        (toggle)="behavior.rememberPause.set(!behavior.rememberPause())"
+      />
+
+      <text class="section" role="header">{{ t().settings.interface }}</text>
+      <text class="label">{{ t().settings.libraryTabs }}</text>
+      <text class="hint">{{ t().settings.libraryTabsHint }}</text>
+      @for (tab of behavior.tabs(); track tab.view; let first = $first, last = $last) {
+        <view class="tab-row">
+          <app-setting-switch class="tab-switch" [label]="t().library.views[tab.view]" [checked]="tab.shown" (toggle)="behavior.toggleTab(tab.view)" />
+          <app-skin-button
+            [label]="t().settings.moveTabUp(t().library.views[tab.view])"
+            icon="moveUp"
+            variant="ghost"
+            size="small"
+            [iconOnly]="true"
+            [disabled]="first"
+            (press)="behavior.moveTab(tab.view, -1)"
+          />
+          <app-skin-button
+            [label]="t().settings.moveTabDown(t().library.views[tab.view])"
+            icon="moveDown"
+            variant="ghost"
+            size="small"
+            [iconOnly]="true"
+            [disabled]="last"
+            (press)="behavior.moveTab(tab.view, 1)"
+          />
+        </view>
+      }
+      <text class="label">{{ t().settings.barAction }}</text>
+      <view class="buttons">
+        @for (action of barActions; track action) {
+          <app-skin-button
+            [label]="t().settings.barActions[action]"
+            size="small"
+            [variant]="behavior.barAction() === action ? 'primary' : 'normal'"
+            [active]="behavior.barAction() === action"
+            (press)="behavior.barAction.set(action)"
+          />
+        }
+      </view>
+      <text class="hint">{{ t().settings.barActionHint }}</text>
+
       <text class="section" role="header">{{ t().settings.library }}</text>
       <view class="buttons">
         <app-skin-button [label]="t().settings.rescan" icon="refresh" size="small" [disabled]="library.refreshing()" (press)="library.scan()" />
@@ -153,6 +235,14 @@ import { SkinButton } from '../ui/skin-button.ts';
       font-size: var(--sk-font-xs);
       font-weight: var(--sk-weight);
     }
+    .tab-row {
+      flex-direction: row;
+      align-items: center;
+      padding-right: 8px;
+    }
+    .tab-switch {
+      flex: 1;
+    }
     .stat {
       flex-direction: row;
       align-items: center;
@@ -174,6 +264,7 @@ import { SkinButton } from '../ui/skin-button.ts';
 })
 export class SettingsScreen {
   protected readonly settings = inject(LibrarySettings);
+  protected readonly behavior = inject(BehaviorSettings);
   protected readonly library = inject(MusicLibrary);
   protected readonly navigation = inject(Navigation);
   private readonly catalog = inject(CatalogService).catalog;
@@ -181,6 +272,8 @@ export class SettingsScreen {
   private readonly dialogs = inject(Dialogs);
   protected readonly t = inject(I18n).messages;
 
+  protected readonly playFrom = PLAY_FROM;
+  protected readonly barActions = BAR_ACTIONS;
   protected readonly separators = SEPARATORS;
   protected readonly folderModes: readonly FolderMode[] = ['exclude', 'include'];
 

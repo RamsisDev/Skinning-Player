@@ -2,7 +2,7 @@ import { Service, computed, inject } from '@angular/core';
 import { type FacetValue, albumKey, entriesOf } from './library-filter.ts';
 import { MusicLibrary } from './music-library.ts';
 import { PLAIN_ALBUM, type ReleaseType } from './release-type.ts';
-import { type Sortable, discOrder } from './sorting.ts';
+import { type Sort, type Sortable, discOrder, newestFirst as newestSongsFirst, sortTracks } from './sorting.ts';
 import { type Track, fold } from './track.ts';
 
 /** The songs that share an album name and album artist (or folder), in disc and track order. */
@@ -188,6 +188,32 @@ export function buildCatalog(tracks: readonly Track[]): Catalog {
     artist: new Map(artists.map((artist) => [artist.key, artist])),
     genre: new Map(genres.map((genre) => [genre.key, genre])),
   };
+}
+
+/** What opens on a screen of its own. */
+export type CatalogKind = 'album' | 'artist' | 'genre';
+
+/**
+ * An album's, artist's or genre's name and songs, in the order its screen lists and plays them:
+ * an album's as the user sorts albums, an artist's newest first, a genre's by name.
+ */
+export function songsOf(
+  catalog: Catalog,
+  kind: CatalogKind,
+  key: string,
+  albumSort: Sort,
+  smart = true,
+): { readonly name: string; readonly songs: Track[] } | null {
+  if (kind === 'album') {
+    const album = catalog.album.get(key);
+    return album ? { name: album.name, songs: sortTracks(album.tracks, albumSort, smart) } : null;
+  }
+  if (kind === 'artist') {
+    const artist = catalog.artist.get(key);
+    return artist ? { name: artist.name, songs: newestSongsFirst(artist.tracks, smart) } : null;
+  }
+  const genre = catalog.genre.get(key);
+  return genre ? { name: genre.name, songs: sortTracks(genre.tracks, { mode: 'name', ascending: true }, smart) } : null;
 }
 
 /** The library's albums, artists and genres, worked out again whenever its songs change. */

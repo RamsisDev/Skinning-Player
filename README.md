@@ -84,10 +84,29 @@ Sorting is **intelligent** by default, as Auxio's: "The Beatles" sorts under B a
 Prisioneros" under P, numbers sort by their value ("2" before "10"), and a file's sort tags
 (`TSOP`, `ARTISTSORT`, `soar`...) win over the name.
 
+## Queue and song menu
+
+The queue button in the full player lists the queue in the order it plays, the song playing
+marked: a tap plays a song, and each moves up or down a place or comes out of the queue. The
+queue, the song playing and how far into it are kept, and come back paused on the next launch.
+
+Every song's menu (in the songs tab, an album, artist or genre, and the search) plays it next,
+adds it to the queue, goes to its artist or album, files it in a playlist, changes its cover,
+shows its **properties** and **shares** its file. The properties are read from the file's
+headers: path, format, size, length, bitrate, sample rate and the ReplayGain a tagger wrote.
+Sharing hands the file itself to another app through `expo-sharing`, so a development build made
+before it was added needs rebuilding (`npm run android`).
+
 ## Settings
 
 The gear in the header opens the settings:
 
+- **When a song is tapped, play from** the list it is in, all songs, or its album, artist or
+  genre. **Remember shuffle**, **Rewind before skipping back**, **Pause on repeat** (repeat one
+  stops at the end of the song) and **Remember pause** (skipping while paused stays paused) are
+  the playback settings.
+- **Library tabs** shows, hides and orders the library's lists; **Mini player button** picks
+  next, repeat mode or shuffle as the button after play.
 - **Rescan** reads the new and changed files; **Full rescan** forgets every tag read and reads
   every file again. **Automatic reloading** rescans by itself, quietly, when the device's music
   changes and whenever the app comes back to the front: Android's media library reports changes
@@ -185,8 +204,8 @@ so a skin only has to list what it changes (like a Winamp skin missing a bitmap)
 - **`icons`**: SVG markup per button, drawn in the button's color through `currentColor`. Slots:
   `play`, `pause`, `previous`, `next`, `shuffle`, `repeat`, `repeatOne`, `library`, `playlists`,
   `skins`, `add`, `addToPlaylist`, `more`, `close`, `back`, `remove`, `rename`, `search`,
-  `import`, `check`, `refresh`, `cover`, `warning`, `settings`, `sort`. `null` restores the default
-  icon.
+  `import`, `check`, `refresh`, `cover`, `warning`, `settings`, `sort`, `queue`, `moveUp`,
+  `moveDown`, `share`, `info`. `null` restores the default icon.
 - **`widgets`**: show or hide the visualizer (4 to 32 bars) and the mini player's display.
 - **`motion`**: `speed` from 0 to 4 (0 turns motion off), an `easing` (`linear`, `ease`,
   `ease-in`, `ease-out`, `ease-in-out`, `smooth`, `snappy`, `bouncy`), how a pressed button
