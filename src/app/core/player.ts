@@ -2,6 +2,7 @@ import { Service, computed, effect, inject, signal, untracked } from '@angular/c
 import { Storage } from '@ng-native/expo/async-storage';
 import { type PlayerState } from '@ng-native/expo/player';
 import { AUDIO_ENGINE } from './audio-engine.ts';
+import { type Facet } from './library-filter.ts';
 import { MusicLibrary } from './music-library.ts';
 import { type Track } from './track.ts';
 
@@ -15,8 +16,12 @@ export interface PlayError {
   readonly reason: FailureReason;
 }
 
-/** What the queue came from: the whole library, a search in it, or a playlist. */
-export type QueueSource = 'library' | 'search' | { readonly playlist: string };
+/** What the queue came from: the whole library, a search in it, a playlist, or an album, artist or genre. */
+export type QueueSource =
+  | 'library'
+  | 'search'
+  | { readonly playlist: string }
+  | { readonly facet: Facet; readonly key: string; readonly name: string };
 
 /** Past this many seconds into a track, "previous" restarts it instead of going back. */
 const RESTART_THRESHOLD = 3;
@@ -113,6 +118,37 @@ export class Player {
     if (!tracks.length) return;
     this.shuffle.set(true);
     this.playTracks(tracks, Math.floor(Math.random() * tracks.length), source);
+  }
+
+  /** Puts tracks right after the one playing, in their order. With nothing playing, plays them. */
+  playNext(tracks: readonly Track[]): void {
+    this.enqueue(tracks, true);
+  }
+
+  /** Puts tracks at the end of the queue. With nothing playing, plays them. */
+  addToQueue(tracks: readonly Track[]): void {
+    this.enqueue(tracks, false);
+  }
+
+  /**
+   * Adds to the queue without touching the track playing. Tracks to play next also go right after
+   * it in the queue itself, so they are still next once shuffle is turned off.
+   */
+  private enqueue(tracks: readonly Track[], next: boolean): void {
+    if (!tracks.length) return;
+    if (!this.current()) {
+      this.playTracks(tracks);
+      return;
+    }
+    const queue = this.queue();
+    const order = this.order();
+    const position = this.position();
+    const at = next ? order[position] + 1 : queue.length;
+    const added = range(tracks.length).map((i) => at + i);
+    const shifted = order.map((i) => (i >= at ? i + tracks.length : i));
+    const where = next ? position + 1 : shifted.length;
+    this.queue.set([...queue.slice(0, at), ...tracks, ...queue.slice(at)]);
+    this.order.set([...shifted.slice(0, where), ...added, ...shifted.slice(where)]);
   }
 
   toggle(): void {

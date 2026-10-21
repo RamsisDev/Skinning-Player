@@ -92,6 +92,49 @@ describe('Player', () => {
     expect(player.queuePosition()).toBe(TRACKS.findIndex((t) => t.id === player.current()!.id) + 1);
   });
 
+  it('plays queued tracks right after the one playing, and added ones at the end, without interrupting it', async () => {
+    const { engine, player } = setup();
+    const [a, b, c] = TRACKS;
+    player.playTracks([a, b], 0);
+    await waitFor(() => expect(engine.loaded).toHaveLength(1));
+
+    player.addToQueue([c]);
+    player.playNext([b]);
+    expect(player.current()?.id).toBe('a');
+    expect(player.queueLength()).toBe(4);
+    expect(engine.loaded).toHaveLength(1);
+
+    const played: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      player.next();
+      await waitFor(() => expect(engine.loaded).toHaveLength(i + 2));
+      played.push(player.current()!.id);
+    }
+    expect(played).toEqual(['b', 'b', 'c']);
+  });
+
+  it('keeps a track to play next after the one playing when shuffle is turned off', async () => {
+    const { engine, player } = setup();
+    player.playTracks(TRACKS, 0);
+    player.toggleShuffle();
+    await waitFor(() => expect(engine.loaded).toHaveLength(1));
+    const playing = player.current()!;
+
+    player.playNext([TRACKS[2]]);
+    player.toggleShuffle();
+    player.next();
+    await waitFor(() => expect(engine.loaded).toHaveLength(2));
+    expect(player.current()?.id).toBe('c');
+    expect(player.queuePosition()).toBe(TRACKS.indexOf(playing) + 2);
+  });
+
+  it('plays what is queued when nothing is playing', async () => {
+    const { engine, player } = setup();
+    player.addToQueue([TRACKS[1]]);
+    await waitFor(() => expect(engine.loaded).toEqual(['file:///music/b.mp3']));
+    expect(player.queueLength()).toBe(1);
+  });
+
   it('starts the library when play is pressed with nothing queued', async () => {
     const { engine, player } = setup();
     player.toggle();

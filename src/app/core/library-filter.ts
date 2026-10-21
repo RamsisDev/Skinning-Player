@@ -39,27 +39,42 @@ export function matchesFilters(track: Track, filters: Filters, except?: Facet): 
   });
 }
 
-const names = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+export const names = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
-/** Every value the tracks have for a facet, with how many of them have it: by name, years newest first. */
-export function facetOptions(tracks: readonly Track[], facet: Facet): FacetOption[] {
-  const found = new Map<string, { count: number; spellings: Map<string, number> }>();
+/** The songs that share a value of a facet: an album, an artist, a genre or a year. */
+export interface Group {
+  readonly facet: Facet;
+  readonly key: string;
+  /** The spelling most of its songs use. */
+  readonly name: string;
+  /** In the order they were given. */
+  readonly tracks: readonly Track[];
+}
+
+/** The tracks gathered by each value they have for a facet, in the order the values first appear. */
+export function groupsOf(tracks: readonly Track[], facet: Facet): Group[] {
+  const found = new Map<string, { tracks: Track[]; spellings: Map<string, number> }>();
   for (const track of tracks) {
     const seen = new Set<string>();
     for (const value of valuesOf(track, facet)) {
       const key = fold(value);
       if (seen.has(key)) continue;
       seen.add(key);
-      const entry = found.get(key) ?? { count: 0, spellings: new Map<string, number>() };
-      entry.count++;
+      const entry = found.get(key) ?? { tracks: [], spellings: new Map<string, number>() };
+      entry.tracks.push(track);
       entry.spellings.set(value, (entry.spellings.get(value) ?? 0) + 1);
       found.set(key, entry);
     }
   }
-  const options = [...found].map(([key, { count, spellings }]) => {
-    const [label] = [...spellings].reduce((best, next) => (next[1] > best[1] ? next : best));
-    return { key, label, count };
+  return [...found].map(([key, { tracks, spellings }]) => {
+    const [name] = [...spellings].reduce((best, next) => (next[1] > best[1] ? next : best));
+    return { facet, key, name, tracks };
   });
+}
+
+/** Every value the tracks have for a facet, with how many of them have it: by name, years newest first. */
+export function facetOptions(tracks: readonly Track[], facet: Facet): FacetOption[] {
+  const options = groupsOf(tracks, facet).map(({ key, name, tracks }) => ({ key, label: name, count: tracks.length }));
   return facet === 'year'
     ? options.sort((a, b) => b.label.localeCompare(a.label))
     : options.sort((a, b) => names.compare(a.label, b.label));

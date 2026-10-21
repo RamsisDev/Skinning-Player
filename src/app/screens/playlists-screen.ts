@@ -7,6 +7,7 @@ import { type Playlist, Playlists } from '../core/playlists.ts';
 import { type Track } from '../core/track.ts';
 import { I18n } from '../i18n/i18n.ts';
 import { LibraryStatus } from '../ui/library-status.ts';
+import { Navigation } from '../ui/navigation.ts';
 import { PlayerView } from '../ui/player-view.ts';
 import { SkinButton } from '../ui/skin-button.ts';
 import { SkinIcon } from '../ui/skin-icon.ts';
@@ -200,7 +201,9 @@ export class PlaylistsScreen {
   private readonly playerView = inject(PlayerView);
   protected readonly t = inject(I18n).messages;
 
-  protected readonly openId = signal<string | null>(null);
+  private readonly navigation = inject(Navigation);
+  /** Set when the search opened a playlist. */
+  protected readonly openId = signal<string | null>(this.navigation.take('playlists')?.playlistId ?? null);
   protected readonly prompt = signal<Prompt | null>(null);
   protected readonly picking = signal(false);
 
@@ -226,7 +229,8 @@ export class PlaylistsScreen {
 
   constructor() {
     const release = inject(HardwareBack).handle(() => {
-      if (!this.openId()) return false;
+      // A playlist opened from the search goes back to the search, as in Auxio.
+      if (!this.openId() || this.navigation.fromSearch()) return false;
       this.openId.set(null);
       return true;
     });
