@@ -10,8 +10,8 @@ export interface NowPlayingInfo {
 /** The one native player the app plays through. A token, so a test can stand in for it. */
 export interface AudioEngine {
   readonly state: Signal<PlayerState>;
-  /** Replaces the current source and starts playing it. */
-  load(uri: string, info: NowPlayingInfo): void;
+  /** Replaces the current source, and starts playing it unless `play` is false. */
+  load(uri: string, info: NowPlayingInfo, play?: boolean): void;
   play(): void;
   pause(): void;
   seekTo(seconds: number): void;
@@ -34,9 +34,9 @@ function expoAudioEngine(): AudioEngine {
   );
   return {
     state: player.state,
-    load(uri, info) {
+    load(uri, info, play = true) {
       player.native.replace({ uri });
-      player.native.play();
+      if (play) player.native.play();
       player.native.setActiveForLockScreen(true, { title: info.title, artist: info.artist || undefined });
     },
     play: () => player.native.play(),

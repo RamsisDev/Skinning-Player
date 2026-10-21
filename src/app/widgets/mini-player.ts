@@ -1,5 +1,6 @@
 import { Component, computed, inject, output } from '@angular/core';
 import { Pressable, Text, View } from '@ng-native/components';
+import { BehaviorSettings } from '../core/behavior-settings.ts';
 import { Player } from '../core/player.ts';
 import { I18n } from '../i18n/i18n.ts';
 import { SkinManager } from '../skins/skin-manager.ts';
@@ -7,7 +8,7 @@ import { CoverArt } from '../ui/cover-art.ts';
 import { SkinButton } from '../ui/skin-button.ts';
 import { Display } from './display.ts';
 
-/** The player docked above the menu. Tapping it opens the full player. */
+/** The player docked above the menu, its last button the one the user chose. Tapping it opens the full player. */
 @Component({
   selector: 'app-mini-player',
   imports: [CoverArt, Display, Pressable, SkinButton, Text, View],
@@ -41,7 +42,33 @@ import { Display } from './display.ts';
           [iconOnly]="true"
           (press)="player.toggle()"
         />
-        <app-skin-button [label]="t().common.next" icon="next" variant="ghost" size="small" [iconOnly]="true" [disabled]="!player.current()" (press)="player.next()" />
+        @switch (behavior.barAction()) {
+          @case ('repeat') {
+            <app-skin-button
+              [label]="t().player.repeat[player.repeat()]"
+              [icon]="player.repeat() === 'one' ? 'repeatOne' : 'repeat'"
+              variant="ghost"
+              size="small"
+              [iconOnly]="true"
+              [active]="player.repeat() !== 'off'"
+              (press)="player.cycleRepeat()"
+            />
+          }
+          @case ('shuffle') {
+            <app-skin-button
+              [label]="t().common.shuffle"
+              icon="shuffle"
+              variant="ghost"
+              size="small"
+              [iconOnly]="true"
+              [active]="player.shuffle()"
+              (press)="player.toggleShuffle()"
+            />
+          }
+          @default {
+            <app-skin-button [label]="t().common.next" icon="next" variant="ghost" size="small" [iconOnly]="true" [disabled]="!player.current()" (press)="player.next()" />
+          }
+        }
       </view>
     </view>
   `,
@@ -93,6 +120,7 @@ import { Display } from './display.ts';
 })
 export class MiniPlayer {
   protected readonly player = inject(Player);
+  protected readonly behavior = inject(BehaviorSettings);
   protected readonly skins = inject(SkinManager);
   protected readonly t = inject(I18n).messages;
   readonly expand = output<void>();

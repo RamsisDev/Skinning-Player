@@ -144,7 +144,7 @@ test('queues a song to play next or at the end from its menu, and goes to its al
   await user.press(await screen.findByRole('button', { name: 'More for Al Cielo No' }));
 
   expect(await screen.findByRole('heading', { name: 'Al Cielo No' })).toBeTruthy();
-  const menu = ['Play next', 'Add to queue', 'Go to artist', 'Go to album', 'Add to playlist', 'Change cover'];
+  const menu = ['Play next', 'Add to queue', 'Go to artist', 'Go to album', 'Add to playlist', 'Change cover', 'Properties', 'Share'];
   for (const label of menu) expect(screen.getByRole('button', { name: label })).toBeTruthy();
 
   await user.press(screen.getByRole('button', { name: 'Play next' }));

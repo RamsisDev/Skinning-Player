@@ -50,7 +50,8 @@
         }
       ],
       "expo-font",
-      "expo-localization"
+      "expo-localization",
+      "expo-sharing"
     ]
   }
 }

@@ -1,10 +1,7 @@
 import { Service, signal } from '@angular/core';
+import { type LibraryView } from '../core/behavior-settings.ts';
 import { type Filters } from '../core/library-filter.ts';
 import { type Tab } from './tab-menu.ts';
-
-/** The lists the library tab shows, as tabs. */
-export const LIBRARY_VIEWS = ['songs', 'albums', 'artists', 'genres'] as const;
-export type LibraryView = (typeof LIBRARY_VIEWS)[number];
 
 /** An album, artist or genre, which opens on a screen of its own. */
 export interface CatalogRef {

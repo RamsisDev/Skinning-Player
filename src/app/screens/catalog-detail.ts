@@ -1,11 +1,11 @@
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { Pressable, Text, View, VirtualList, VirtualListRow } from '@ng-native/components';
 import { Dialogs } from '@ng-native/device';
-import { type Album, CatalogService } from '../core/catalog.ts';
+import { type Album, CatalogService, songsOf } from '../core/catalog.ts';
 import { LibrarySettings } from '../core/library-settings.ts';
 import { Player, type QueueSource } from '../core/player.ts';
 import { RELEASE_KINDS } from '../core/release-type.ts';
-import { SORT_MODES, type Sort, newestFirst, sortGroups, sortTracks } from '../core/sorting.ts';
+import { SORT_MODES, type Sort, sortGroups } from '../core/sorting.ts';
 import { type Track, formatTime } from '../core/track.ts';
 import { I18n } from '../i18n/i18n.ts';
 import { CoverArt } from '../ui/cover-art.ts';
@@ -16,6 +16,7 @@ import { SkinButton } from '../ui/skin-button.ts';
 import { SortSheet } from '../ui/sort-sheet.ts';
 import { TrackRow } from '../ui/track-row.ts';
 import { AddToPlaylistSheet } from './add-to-playlist-sheet.ts';
+import { SongMenu } from './song-menu.ts';
 
 const HEADER_HEIGHT = 40;
 const ROW_HEIGHT = 64;
@@ -47,7 +48,20 @@ interface Detail {
  */
 @Component({
   selector: 'app-catalog-detail',
-  imports: [AddToPlaylistSheet, CoverArt, MenuSheet, Pressable, SkinButton, SortSheet, Text, TrackRow, View, VirtualList, VirtualListRow],
+  imports: [
+    AddToPlaylistSheet,
+    CoverArt,
+    MenuSheet,
+    Pressable,
+    SkinButton,
+    SongMenu,
+    SortSheet,
+    Text,
+    TrackRow,
+    View,
+    VirtualList,
+    VirtualListRow,
+  ],
   host: { style: 'flex: 1' },
   template: `
     <view class="toolbar">
@@ -99,7 +113,16 @@ interface Detail {
                     [current]="player.current()?.id === song.track.id"
                     (press)="play(detail, song.index)"
                     (longPress)="adding.set([song.track])"
-                  />
+                  >
+                    <app-skin-button
+                      [label]="t().library.moreFor(song.track.title)"
+                      icon="more"
+                      variant="ghost"
+                      size="small"
+                      [iconOnly]="true"
+                      (press)="songMenu.show(song.track)"
+                    />
+                  </app-track-row>
                 }
               }
               @case ('group') {
@@ -127,6 +150,7 @@ interface Detail {
     }
     <app-sort-sheet [open]="sorting()" [modes]="modes" [sort]="albumSort()" (change)="setSort($event)" (close)="sorting.set(false)" />
     <app-menu-sheet [menu]="menu()" (close)="menu.set(null)" />
+    <app-song-menu #songMenu [within]="ref()" (open)="open.emit($event)" />
     <app-add-to-playlist-sheet [tracks]="adding()" (close)="adding.set(null)" />
   `,
   styles: `
@@ -265,7 +289,7 @@ export class CatalogDetail {
         rows.push({ kind: 'header', key: 'appearsOn', label: t.catalog.appearsOn });
         rows.push(...artist.appearsOn.map((album) => this.albumRow(album, true)));
       }
-      const songs = newestFirst(artist.tracks, smart);
+      const songs = songsOf(catalog, 'artist', key, this.albumSort(), smart)?.songs ?? [];
       rows.push({ kind: 'header', key: 'songs', label: t.catalog.songs });
       rows.push(...songs.map((track, index): DetailRow => ({ kind: 'song', key: `song:${track.id}`, track, index })));
       const albums = artist.albums.length ? t.search.albums(artist.albums.length) : '';
@@ -289,7 +313,7 @@ export class CatalogDetail {
       { mode: 'name', ascending: true },
       smart,
     );
-    const songs = sortTracks(genre.tracks, { mode: 'name', ascending: true }, smart);
+    const songs = songsOf(catalog, 'genre', key, this.albumSort(), smart)?.songs ?? [];
     const rows: DetailRow[] = [];
     if (artists.length) {
       rows.push({ kind: 'header', key: 'artists', label: t.catalog.artists });
@@ -391,7 +415,7 @@ export class CatalogDetail {
   private albumDetail(album: Album): Detail {
     const t = this.t();
     const sort = this.albumSort();
-    const songs = sortTracks(album.tracks, sort, this.settings.smartSort());
+    const songs = songsOf(this.catalog(), 'album', album.key, sort, this.settings.smartSort())?.songs ?? [];
     const byDisc = album.discs > 1 && sort.mode === 'disc';
     // An album whose files give no track numbers shows its covers instead.
     const numbered = album.tracks.some((track) => track.trackNumber !== null);

@@ -435,3 +435,59 @@ test('plays the whole library in order with play all, and shuffled with shuffle'
   await user.press(screen.getByRole('button', { name: 'Open player' }));
   expect(state(fullPlayer().getByRole('button', { name: 'Shuffle' }))).toMatchObject({ selected: true });
 });
+
+/** The sheet whose heading is `name`, to look inside it. */
+function sheet(name: string | RegExp) {
+  let node: FakeFabricNode = screen.getByRole('heading', { name });
+  while (node.parent && !/Modal/.test(node.viewName)) node = node.parent;
+  return within(node);
+}
+
+test('shows the queue from the full player, where a song can move, come out or be played', async () => {
+  const { engine, user } = await start();
+  await playFromLibrary(user, 'Aurora, Alpha Band');
+
+  await user.press(fullPlayer().getByRole('button', { name: 'Queue' }));
+  const queue = () => sheet(/^Queue/);
+  expect(await screen.findByRole('heading', { name: 'Queue  ·  1 of 3' })).toBeTruthy();
+  expect(state(queue().getByRole('button', { name: 'Aurora, Alpha Band' }))).toMatchObject({ selected: true });
+  expect(state(queue().getByRole('button', { name: 'Move Aurora up' }))).toMatchObject({ disabled: true });
+
+  await user.press(queue().getByRole('button', { name: 'Remove Breeze from the queue' }));
+  expect(await screen.findByRole('heading', { name: 'Queue  ·  1 of 2' })).toBeTruthy();
+  expect(queue().queryByRole('button', { name: 'Breeze, Bravo Band' })).toBeNull();
+
+  await user.press(queue().getByRole('button', { name: 'Move Cascade up' }));
+  expect(await screen.findByRole('heading', { name: 'Queue  ·  2 of 2' })).toBeTruthy();
+  expect(engine.loaded).toEqual([uri('1')]);
+
+  await user.press(queue().getByRole('button', { name: 'Cascade' }));
+  await waitFor(() => expect(engine.loaded).toEqual([uri('1'), uri('3')]));
+  expect(await screen.findByRole('heading', { name: 'Queue  ·  1 of 2' })).toBeTruthy();
+
+  await user.press(queue().getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('heading', { name: /^Queue/ })).toBeNull();
+  expect(fullPlayer().getByRole('heading', { name: 'Cascade' })).toBeTruthy();
+});
+
+test('brings back the queue and where the song was after the app is restarted, paused until play', async () => {
+  const disk = new Map<string, string>();
+  const first = await start({ disk });
+  await playFromLibrary(first.user, 'Breeze, Bravo Band');
+  first.engine.seekTo(75);
+  await first.user.press(fullPlayer().getByRole('button', { name: 'Pause' }));
+  await waitFor(() => expect(disk.get('player.place')).toBe('{"position":1,"elapsed":75}'));
+  cleanup();
+
+  const { engine, user } = await start({ disk });
+  expect(await miniPlayer().findByText('Breeze')).toBeTruthy();
+  expect(engine.loaded).toEqual([]);
+
+  await user.press(screen.getByRole('button', { name: 'Open player' }));
+  expect(fullPlayer().getByText('1:15')).toBeTruthy();
+  await user.press(fullPlayer().getByRole('button', { name: 'Play' }));
+  await waitFor(() => expect(engine.loaded).toEqual([uri('2')]));
+  expect(engine.state().currentTime).toBe(75);
+  await user.press(fullPlayer().getByRole('button', { name: 'Next' }));
+  expect(await fullPlayer().findByRole('heading', { name: 'Cascade' })).toBeTruthy();
+});

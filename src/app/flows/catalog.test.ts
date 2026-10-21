@@ -137,3 +137,20 @@ test('sorts the albums by date', async () => {
     .map((label) => label.split(',')[0]);
   expect(albums).toEqual(['Da Funk', 'Discovery', 'Hits 2013', 'GIRL']);
 });
+
+test("gives each of an album's songs a menu, which goes to its artists but not to the album on show", async () => {
+  const { user, back } = await launch();
+  await user.press(screen.getByRole('tab', { name: 'Albums' }));
+  await user.press(await screen.findByRole('button', { name: 'Hits 2013, Various Artists  ·  2013  ·  1 song' }));
+  await user.press(await screen.findByRole('button', { name: 'More for Get Lucky' }));
+
+  expect(await screen.findByRole('button', { name: 'Properties' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Go to album' })).toBeNull();
+  await user.press(screen.getByRole('button', { name: 'Go to artist' }));
+  expect(await screen.findByRole('heading', { name: 'Go to artist' })).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Pharrell Williams' }));
+
+  expect(await screen.findByRole('heading', { name: 'Pharrell Williams' })).toBeTruthy();
+  expect(await back.press()).toBe(true);
+  expect(await screen.findByRole('heading', { name: 'Hits 2013' })).toBeTruthy();
+});

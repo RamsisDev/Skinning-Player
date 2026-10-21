@@ -1,6 +1,6 @@
 /**
  * The details an audio file carries about its song: title, artists, album, album artists, genres,
- * dates, track and disc numbers, release type and sort names. Android's
+ * dates, track and disc numbers, release type, sort names and ReplayGain. Android's
  * media store indexes them but answers only file names, so the app reads them from the file, as it
  * does covers: an ID3v2 tag at the head (MP3, some FLAC) or in a WAV's `id3 ` chunk, an ID3v1 tag
  * at the end of an MP3, a WAV's LIST INFO chunk, the comments of a FLAC or Ogg (Vorbis, Opus)
@@ -36,6 +36,8 @@ export interface Tags {
   readonly artistSort?: string;
   readonly albumSort?: string;
   readonly albumArtistSort?: string;
+  /** The ReplayGain adjustments a tagger measured, in dB: for the song alone, and for its album. */
+  readonly replayGain?: { readonly track?: number; readonly album?: number };
 }
 
 type Field =
@@ -54,7 +56,11 @@ type Field =
   | 'titleSort'
   | 'artistSort'
   | 'albumSort'
-  | 'albumArtistSort';
+  | 'albumArtistSort'
+  | 'replayGainTrack'
+  | 'replayGainAlbum'
+  | 'r128Track'
+  | 'r128Album';
 /** The values each field was given, by the first tag that names it. */
 type Found = Partial<Record<Field, string[]>>;
 
@@ -149,11 +155,26 @@ function clean(found: Found): Tags {
   const disc = position(found.disc);
   if (disc) tags.disc = disc;
   if (/^(1|true|yes)$/i.test(text('compilation') ?? '')) tags.compilation = true;
+  const replayGain = { track: gain(text('replayGainTrack'), text('r128Track')), album: gain(text('replayGainAlbum'), text('r128Album')) };
+  if (replayGain.track !== undefined || replayGain.album !== undefined) {
+    tags.replayGain = Object.fromEntries(Object.entries(replayGain).filter(([, value]) => value !== undefined));
+  }
   for (const field of ['titleSort', 'artistSort', 'albumSort', 'albumArtistSort'] as const) {
     const value = text(field);
     if (value) tags[field] = value;
   }
   return tags;
+}
+
+/**
+ * A ReplayGain adjustment in dB, from "-7.89 dB"; or from Opus's R128 gain, a whole number of
+ * 1/256 dB toward -23 LUFS, moved to ReplayGain's -18.
+ */
+function gain(replayGain: string | undefined, r128: string | undefined): number | undefined {
+  const db = Number.parseFloat((replayGain ?? '').replace(',', '.'));
+  if (Number.isFinite(db)) return db;
+  const q78 = Number.parseInt(r128 ?? '', 10);
+  return Number.isFinite(q78) ? Math.round((q78 / 256 + 5) * 100) / 100 : undefined;
 }
 
 // ID3v2
@@ -210,6 +231,10 @@ const CUSTOM_FIELDS: Readonly<Record<string, Field>> = {
   'ALBUM ARTIST': 'albumArtist',
   ALBUMARTISTSORT: 'albumArtistSort',
   COMPILATION: 'compilation',
+  REPLAYGAIN_TRACK_GAIN: 'replayGainTrack',
+  REPLAYGAIN_ALBUM_GAIN: 'replayGainAlbum',
+  R128_TRACK_GAIN: 'r128Track',
+  R128_ALBUM_GAIN: 'r128Album',
 };
 
 function fromId3(frames: Iterable<Id3Frame>, found: Found): void {

@@ -12,11 +12,26 @@ import { SeekBar } from '../widgets/seek-bar.ts';
 import { Visualizer } from '../widgets/visualizer.ts';
 import { AddToPlaylistSheet } from './add-to-playlist-sheet.ts';
 import { CoverSheet } from './cover-sheet.ts';
+import { QueueSheet } from './queue-sheet.ts';
 
 /** The full player: the cover, the song, the seek bar and the transport, all drawn by the skin. */
 @Component({
   selector: 'app-now-playing',
-  imports: [AddToPlaylistSheet, CoverArt, CoverSheet, Modal, SafeAreaProvider, SafeAreaView, SeekBar, SkinBackdrop, SkinButton, Text, View, Visualizer],
+  imports: [
+    AddToPlaylistSheet,
+    CoverArt,
+    CoverSheet,
+    Modal,
+    QueueSheet,
+    SafeAreaProvider,
+    SafeAreaView,
+    SeekBar,
+    SkinBackdrop,
+    SkinButton,
+    Text,
+    View,
+    Visualizer,
+  ],
   template: `
     <modal [visible]="view.open()" [animationType]="skins.playerTransition()" (requestClose)="view.hide()">
       <safe-area-provider [reportInsets]="false" class="fill">
@@ -27,6 +42,14 @@ import { CoverSheet } from './cover-sheet.ts';
               <app-skin-button [label]="t().player.close" icon="close" variant="ghost" [iconOnly]="true" (press)="view.hide()" />
               <text class="heading">{{ t().player.heading }}</text>
               <view class="header-actions">
+                <app-skin-button
+                  [label]="t().queue.open"
+                  icon="queue"
+                  variant="ghost"
+                  [iconOnly]="true"
+                  [disabled]="!player.queueLength()"
+                  (press)="showingQueue.set(true)"
+                />
                 <app-skin-button
                   [label]="t().common.changeCover"
                   icon="cover"
@@ -98,6 +121,7 @@ import { CoverSheet } from './cover-sheet.ts';
         </view>
         <app-add-to-playlist-sheet [track]="adding()" (close)="adding.set(null)" />
         <app-cover-sheet [track]="editingCover()" (close)="editingCover.set(null)" />
+        <app-queue-sheet [open]="showingQueue()" (close)="showingQueue.set(false)" />
       </safe-area-provider>
     </modal>
   `,
@@ -189,6 +213,7 @@ export class NowPlaying {
 
   protected readonly adding = signal<Track | null>(null);
   protected readonly editingCover = signal<Track | null>(null);
+  protected readonly showingQueue = signal(false);
   /** The space left for the cover, which is as large a square as fits in it. */
   protected readonly artArea = signal({ width: 0, height: 0 });
   protected readonly artSize = computed(() => {
