@@ -9,12 +9,12 @@ import { Sheet } from '../ui/sheet.ts';
 import { SkinButton } from '../ui/skin-button.ts';
 import { SkinIcon } from '../ui/skin-icon.ts';
 
-/** Puts one track into an existing playlist, or into a new one named on the spot. */
+/** Puts one track, or several, into an existing playlist, or into a new one named on the spot. */
 @Component({
   selector: 'app-add-to-playlist-sheet',
   imports: [Pressable, ScrollView, Sheet, SkinButton, SkinIcon, Text, TextInput, View],
   template: `
-    <app-sheet [open]="!!track()" [title]="heading()" placement="top" (close)="close.emit()">
+    <app-sheet [open]="!!adding().length" [title]="heading()" placement="top" (close)="close.emit()">
       <view class="create">
         <text-input
           class="input"
@@ -101,28 +101,38 @@ export class AddToPlaylistSheet {
   private readonly skins = inject(SkinManager);
   protected readonly t = inject(I18n).messages;
 
-  /** The track to add; the sheet is open while there is one. */
+  /** The track to add; the sheet is open while there is one, or `tracks`. */
   readonly track = input<Track | null>(null);
+  /** Several tracks to add at once. */
+  readonly tracks = input<readonly Track[] | null>(null);
   readonly close = output<void>();
 
-  protected readonly name = linkedSignal({ source: () => this.track(), computation: () => '' });
+  protected readonly adding = computed<readonly Track[]>(() => {
+    const track = this.track();
+    return this.tracks() ?? (track ? [track] : []);
+  });
+  protected readonly name = linkedSignal({ source: () => this.adding(), computation: () => '' });
   protected readonly colors = computed(() => this.skins.active().colors);
-  protected readonly heading = computed(() => this.t().addSheet.heading(this.track()?.title ?? ''));
+  protected readonly heading = computed(() => {
+    const adding = this.adding();
+    const t = this.t().addSheet;
+    return adding.length === 1 ? t.heading(adding[0].title) : t.headingMany(adding.length);
+  });
 
   protected addTo(playlistId: string, playlistName: string): void {
-    const track = this.track();
-    if (!track) return;
-    const added = this.playlists.addTracks(playlistId, [track.id]);
+    const adding = this.adding();
+    if (!adding.length) return;
+    const added = this.playlists.addTracks(playlistId, adding.map((track) => track.id));
     const t = this.t().addSheet;
     this.dialogs.notify(added ? t.addedTo(playlistName) : t.alreadyIn(playlistName));
     this.close.emit();
   }
 
   protected createWithTrack(): void {
-    const track = this.track();
+    const adding = this.adding();
     const name = this.name().trim();
-    if (!track || !name) return;
-    this.playlists.create(name, [track.id]);
+    if (!adding.length || !name) return;
+    this.playlists.create(name, adding.map((track) => track.id));
     this.dialogs.notify(this.t().addSheet.created(name));
     this.close.emit();
   }

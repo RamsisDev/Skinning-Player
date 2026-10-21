@@ -16,6 +16,7 @@ import { type Track, matchesQuery } from '../core/track.ts';
 import { I18n } from '../i18n/i18n.ts';
 import { SkinManager } from '../skins/skin-manager.ts';
 import { LibraryStatus } from '../ui/library-status.ts';
+import { Navigation } from '../ui/navigation.ts';
 import { PlayerView } from '../ui/player-view.ts';
 import { SkinButton } from '../ui/skin-button.ts';
 import { SkinIcon } from '../ui/skin-icon.ts';
@@ -186,7 +187,8 @@ export class LibraryScreen {
   protected readonly adding = signal<Track | null>(null);
   protected readonly editingCover = signal<Track | null>(null);
   protected readonly colors = computed(() => this.skins.active().colors);
-  protected readonly filters = signal<Filters>({});
+  /** Set to an album's, artist's or genre's songs when the search opened the library to show one. */
+  protected readonly filters = signal<Filters>(inject(Navigation).take('library')?.filters ?? {});
   /** The detail whose filter sheet is open. */
   protected readonly picking = signal<Facet | null>(null);
   protected readonly filtered = computed(() => hasFilters(this.filters()));

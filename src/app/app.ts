@@ -6,11 +6,14 @@ import { LanguageSheet } from './screens/language-sheet.ts';
 import { LibraryScreen } from './screens/library-screen.ts';
 import { NowPlaying } from './screens/now-playing.ts';
 import { PlaylistsScreen } from './screens/playlists-screen.ts';
+import { SearchScreen } from './screens/search-screen.ts';
 import { SkinsScreen } from './screens/skins-screen.ts';
 import { SkinManager } from './skins/skin-manager.ts';
 import { PlayerView } from './ui/player-view.ts';
+import { Navigation } from './ui/navigation.ts';
 import { SkinBackdrop } from './ui/skin-backdrop.ts';
-import { type Tab, TabMenu } from './ui/tab-menu.ts';
+import { SkinIcon } from './ui/skin-icon.ts';
+import { TabMenu } from './ui/tab-menu.ts';
 import { MiniPlayer } from './widgets/mini-player.ts';
 
 /**
@@ -27,7 +30,9 @@ import { MiniPlayer } from './widgets/mini-player.ts';
     Pressable,
     SafeAreaProvider,
     SafeAreaView,
+    SearchScreen,
     SkinBackdrop,
+    SkinIcon,
     SkinsScreen,
     TabMenu,
     Text,
@@ -42,6 +47,16 @@ import { MiniPlayer } from './widgets/mini-player.ts';
           <view class="header">
             <text class="logo">SKINNING PLAYER</text>
             <text class="skin-name" [numberOfLines]="1">{{ skins.active().name }}</text>
+            @if (!navigation.searching()) {
+              <pressable
+                class="language"
+                accessibilityRole="button"
+                [accessibilityLabel]="i18n.messages().search.open"
+                (press)="navigation.openSearch()"
+              >
+                <app-skin-icon slot="search" [size]="16" color="var(--sk-button-text)" />
+              </pressable>
+            }
             <pressable
               class="language"
               accessibilityRole="button"
@@ -52,20 +67,24 @@ import { MiniPlayer } from './widgets/mini-player.ts';
             </pressable>
           </view>
           <view class="content">
-            @switch (tab()) {
-              @case ('library') {
-                <app-library-screen />
-              }
-              @case ('playlists') {
-                <app-playlists-screen />
-              }
-              @case ('skins') {
-                <app-skins-screen />
+            @if (navigation.searching()) {
+              <app-search-screen />
+            } @else {
+              @switch (navigation.tab()) {
+                @case ('library') {
+                  <app-library-screen />
+                }
+                @case ('playlists') {
+                  <app-playlists-screen />
+                }
+                @case ('skins') {
+                  <app-skins-screen />
+                }
               }
             }
           </view>
           <app-mini-player (expand)="playerView.show()" />
-          <app-tab-menu [active]="tab()" (select)="tab.set($event)" />
+          <app-tab-menu [active]="navigation.tab()" (select)="navigation.selectTab($event)" />
         </safe-area-view>
         <app-now-playing />
         <app-language-sheet [open]="choosingLanguage()" (close)="choosingLanguage.set(false)" />
@@ -155,7 +174,7 @@ import { MiniPlayer } from './widgets/mini-player.ts';
 })
 export class App {
   protected readonly skins = inject(SkinManager);
-  protected readonly tab = signal<Tab>('library');
+  protected readonly navigation = inject(Navigation);
   protected readonly playerView = inject(PlayerView);
   protected readonly i18n = inject(I18n);
   protected readonly choosingLanguage = signal(false);
@@ -164,10 +183,15 @@ export class App {
     const statusBar = inject(StatusBar);
     effect(() => statusBar.set({ style: this.skins.active().statusBar === 'light' ? 'light' : 'dark' }));
 
-    // Back from another tab returns to the library before it leaves the app.
+    // Back from a search result returns to the search, and from another tab to the library,
+    // before it leaves the app.
     inject(HardwareBack).handle(() => {
-      if (this.tab() === 'library') return false;
-      this.tab.set('library');
+      if (this.navigation.fromSearch()) {
+        this.navigation.returnToSearch();
+        return true;
+      }
+      if (this.navigation.tab() === 'library') return false;
+      this.navigation.selectTab('library');
       return true;
     });
   }

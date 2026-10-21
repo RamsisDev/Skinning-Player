@@ -186,7 +186,7 @@ export class Display {
   private sourceName(): string {
     const source = this.player.source();
     if (!source) return '';
-    if (typeof source === 'object') return source.playlist;
+    if (typeof source === 'object') return 'playlist' in source ? source.playlist : source.name;
     return this.t().sources[source];
   }
 }
