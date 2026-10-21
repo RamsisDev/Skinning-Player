@@ -7,9 +7,9 @@ import { type Track, trackFromFile, withTags } from './track.ts';
 const song = (id: string, filename: string, tags: Tags): Track => withTags(trackFromFile(id, filename, 200), tags);
 
 const tracks = [
-  song('1', 'juanes-1.mp3', { title: 'A Dios Le Pido', artist: 'Juanes', album: 'Un Día Normal', genre: 'Rock' }),
-  song('2', 'amarrame.mp3', { title: 'Amárrame', artist: 'Mon Laferte, Juanes', album: 'La Trenza', genre: 'Pop' }),
-  song('3', 'back-in-black.flac', { title: 'Back in Black', artist: 'AC/DC', album: 'Back in Black', genre: 'Hard Rock' }),
+  song('1', 'juanes-1.mp3', { title: 'A Dios Le Pido', artists: ['Juanes'], album: 'Un Día Normal', genres: ['Rock'] }),
+  song('2', 'amarrame.mp3', { title: 'Amárrame', artists: ['Mon Laferte, Juanes'], album: 'La Trenza', genres: ['Pop'] }),
+  song('3', 'back-in-black.flac', { title: 'Back in Black', artists: ['AC/DC'], album: 'Back in Black', genres: ['Hard Rock'] }),
   song('4', 'voice-note-0412.m4a', { title: 'Untitled' }),
 ];
 const playlists: Playlist[] = [

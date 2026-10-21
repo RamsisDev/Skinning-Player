@@ -7,6 +7,7 @@ import { LibraryScreen } from './screens/library-screen.ts';
 import { NowPlaying } from './screens/now-playing.ts';
 import { PlaylistsScreen } from './screens/playlists-screen.ts';
 import { SearchScreen } from './screens/search-screen.ts';
+import { SettingsScreen } from './screens/settings-screen.ts';
 import { SkinsScreen } from './screens/skins-screen.ts';
 import { SkinManager } from './skins/skin-manager.ts';
 import { PlayerView } from './ui/player-view.ts';
@@ -31,6 +32,7 @@ import { MiniPlayer } from './widgets/mini-player.ts';
     SafeAreaProvider,
     SafeAreaView,
     SearchScreen,
+    SettingsScreen,
     SkinBackdrop,
     SkinIcon,
     SkinsScreen,
@@ -57,6 +59,16 @@ import { MiniPlayer } from './widgets/mini-player.ts';
                 <app-skin-icon slot="search" [size]="16" color="var(--sk-button-text)" />
               </pressable>
             }
+            @if (!navigation.settingsOpen()) {
+              <pressable
+                class="language"
+                accessibilityRole="button"
+                [accessibilityLabel]="i18n.messages().settings.open"
+                (press)="navigation.openSettings()"
+              >
+                <app-skin-icon slot="settings" [size]="16" color="var(--sk-button-text)" />
+              </pressable>
+            }
             <pressable
               class="language"
               accessibilityRole="button"
@@ -67,7 +79,9 @@ import { MiniPlayer } from './widgets/mini-player.ts';
             </pressable>
           </view>
           <view class="content">
-            @if (navigation.searching()) {
+            @if (navigation.settingsOpen()) {
+              <app-settings-screen />
+            } @else if (navigation.searching()) {
               <app-search-screen />
             } @else {
               @switch (navigation.tab()) {

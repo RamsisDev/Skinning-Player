@@ -24,6 +24,8 @@ import {
   lucideSkipForward,
   lucideTrash2,
   lucideTriangleAlert,
+  lucideSettings,
+  lucideArrowUpDown,
 } from '@ng-icons/lucide';
 import { NgIcon } from '@ng-native/icons';
 import { type IconSlot, type Skin } from '../skins/skin.ts';
@@ -53,6 +55,8 @@ const DEFAULT_ICONS: Record<IconSlot, string> = {
   refresh: 'lucideRefreshCw',
   cover: 'lucideImage',
   warning: 'lucideTriangleAlert',
+  settings: 'lucideSettings',
+  sort: 'lucideArrowUpDown',
 };
 
 /** An icon for a button slot: the active skin's own SVG for it, or the default glyph. */
@@ -84,6 +88,8 @@ const DEFAULT_ICONS: Record<IconSlot, string> = {
       lucideSkipForward,
       lucideTrash2,
       lucideTriangleAlert,
+  lucideSettings,
+  lucideArrowUpDown,
     }),
   ],
   template: `

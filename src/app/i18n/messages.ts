@@ -3,7 +3,34 @@
  * the `Messages` type, so a language missing a string, or an argument, fails the build.
  */
 
+import { type ReleaseKind, type ReleaseRefinement } from '../core/release-type.ts';
+import { type SortMode } from '../core/sorting.ts';
+import { type Separator } from '../core/track.ts';
+
 const songs = (n: number): string => (n === 1 ? '1 song' : `${n} songs`);
+
+/** A size in bytes as people read it: "820 KB", "3.4 GB". */
+function size(bytes: number, units: readonly string[], decimal: string): string {
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  const digits = unit && value < 10 ? value.toFixed(1).replace('.', decimal) : String(Math.round(value));
+  return `${digits} ${units[unit]}`;
+}
+
+const RELEASE_EN: Record<ReleaseKind, string> = {
+  album: 'Album',
+  ep: 'EP',
+  single: 'Single',
+  compilation: 'Compilation',
+  soundtrack: 'Soundtrack',
+  mixtape: 'Mixtape',
+  djMix: 'DJ mix',
+  demo: 'Demo',
+};
 
 export const en = {
   common: {
@@ -54,6 +81,105 @@ export const en = {
     moreFor: (title: string) => `More for ${title}`,
     noMatch: 'No songs match your search.',
     noAudio: 'No audio files were found on this device.',
+    views: { songs: 'Songs', albums: 'Albums', artists: 'Artists', genres: 'Genres' },
+    none: { albums: 'No albums. A song with no album tag is only in Songs.', artists: 'No artists.', genres: 'No genres.' },
+  },
+  catalog: {
+    back: 'Back',
+    open: (name: string) => `Open ${name}`,
+    disc: (n: number) => `Disc ${n}`,
+    appearsOn: 'Appears on',
+    songs: 'Songs',
+    artists: 'Artists',
+    goToArtist: (name: string) => `Go to ${name}`,
+    /** "Album", or refined: "Live album", "Remix EP". */
+    release: (kind: ReleaseKind, refinement: ReleaseRefinement | null) => {
+      const name = RELEASE_EN[kind];
+      if (!refinement) return name;
+      return `${refinement === 'live' ? 'Live' : 'Remix'} ${/^(EP|DJ)/.test(name) ? name : name.toLowerCase()}`;
+    },
+    releases: {
+      album: 'Albums',
+      ep: 'EPs',
+      single: 'Singles',
+      compilation: 'Compilations',
+      soundtrack: 'Soundtracks',
+      mixtape: 'Mixtapes',
+      djMix: 'DJ mixes',
+      demo: 'Demos',
+    } as Record<ReleaseKind, string>,
+    variousArtists: 'Various artists',
+  },
+  sorting: {
+    button: 'Sort',
+    title: 'Sort by',
+    modes: {
+      name: 'Name',
+      artist: 'Artist',
+      album: 'Album',
+      date: 'Date',
+      duration: 'Duration',
+      count: 'Song count',
+      disc: 'Disc',
+      track: 'Track',
+      added: 'Date added',
+    } as Record<SortMode, string>,
+    ascending: 'Ascending',
+    descending: 'Descending',
+  },
+  settings: {
+    open: 'Settings',
+    title: 'Settings',
+    close: 'Close settings',
+    library: 'Library',
+    rescan: 'Rescan',
+    rescanHint: 'Reads the files that are new or changed.',
+    fullRescan: 'Full rescan',
+    fullRescanHint: 'Forgets every tag read and reads every file again.',
+    autoReload: 'Automatic reloading',
+    autoReloadHint: 'Rescans by itself when the music on the device changes, and when you come back to the app.',
+    content: 'Content',
+    excludeNonMusic: 'Exclude non-music',
+    excludeNonMusicHint: 'Leaves out podcasts, audiobooks, ringtones, notifications, alarms and recordings.',
+    includeHidden: 'Include hidden files',
+    includeHiddenHint: 'Reads hidden files, and the files in hidden folders.',
+    folders: 'Music folders',
+    folderModes: { exclude: 'Exclude', include: 'Include only' },
+    folderHint: {
+      exclude: 'The folders turned on, and the folders in them, are left out.',
+      include: 'Only the folders turned on, and the folders in them, are read.',
+    },
+    noFolders: 'No folders yet: the library has not been read.',
+    internal: 'Internal storage',
+    external: (name: string) => `SD card (${name})`,
+    folderMeta: (where: string, n: number) => `${where}  ·  ${songs(n)}`,
+    tags: 'Tags',
+    separators: 'Multi-value separators',
+    separatorsHint:
+      'Splits artists, album artists and genres that hold several values. A backslash before a separator keeps it in a name, as in AC\\/DC.',
+    separatorNames: {
+      ',': 'Comma (,)',
+      ';': 'Semicolon (;)',
+      '/': 'Slash (/)',
+      '+': 'Plus (+)',
+      '&': 'Ampersand (&)',
+    } as Record<Separator, string>,
+    smartSort: 'Intelligent sorting',
+    smartSortHint: 'Sorts names past articles such as "The" and "El", and numbers by their value.',
+    covers: 'Covers',
+    folderCovers: 'Folder covers',
+    folderCoversHint: "Shows a cover.jpg or folder.jpg from a song's folder when it has no cover of its own.",
+    folderCoversDenied: 'Folder covers need access to the images on this device.',
+    statistics: 'Statistics',
+    stats: {
+      songs: 'Songs',
+      albums: 'Albums',
+      artists: 'Artists',
+      genres: 'Genres',
+      duration: 'Total duration',
+      size: 'Total size',
+    },
+    size: (bytes: number) => size(bytes, ['B', 'KB', 'MB', 'GB', 'TB'], '.'),
   },
   search: {
     open: 'Search',
@@ -68,6 +194,7 @@ export const en = {
     variousArtists: 'Various artists',
     albums: (n: number) => (n === 1 ? '1 album' : `${n} albums`),
     artists: (n: number) => (n === 1 ? '1 artist' : `${n} artists`),
+    genres: (n: number) => (n === 1 ? '1 genre' : `${n} genres`),
   },
   filters: {
     artist: 'Artist',
@@ -200,6 +327,17 @@ export type Messages = typeof en;
 
 const canciones = (n: number): string => (n === 1 ? '1 canción' : `${n} canciones`);
 
+const RELEASE_ES: Record<ReleaseKind, string> = {
+  album: 'Álbum',
+  ep: 'EP',
+  single: 'Sencillo',
+  compilation: 'Recopilatorio',
+  soundtrack: 'Banda sonora',
+  mixtape: 'Mixtape',
+  djMix: 'Mezcla de DJ',
+  demo: 'Demo',
+};
+
 export const es: Messages = {
   common: {
     ok: 'Aceptar',
@@ -249,6 +387,108 @@ export const es: Messages = {
     moreFor: (title) => `Más opciones de ${title}`,
     noMatch: 'Ninguna canción coincide con tu búsqueda.',
     noAudio: 'No se encontraron archivos de audio en este dispositivo.',
+    views: { songs: 'Canciones', albums: 'Álbumes', artists: 'Artistas', genres: 'Géneros' },
+    none: {
+      albums: 'No hay álbumes. Una canción sin etiqueta de álbum solo está en Canciones.',
+      artists: 'No hay artistas.',
+      genres: 'No hay géneros.',
+    },
+  },
+  catalog: {
+    back: 'Volver',
+    open: (name) => `Abrir ${name}`,
+    disc: (n) => `Disco ${n}`,
+    appearsOn: 'Aparece en',
+    songs: 'Canciones',
+    artists: 'Artistas',
+    goToArtist: (name) => `Ir a ${name}`,
+    release: (kind, refinement) => {
+      const name = RELEASE_ES[kind];
+      if (!refinement) return name;
+      return refinement === 'live' ? `${name} en vivo` : `${name} de remixes`;
+    },
+    releases: {
+      album: 'Álbumes',
+      ep: 'EP',
+      single: 'Sencillos',
+      compilation: 'Recopilatorios',
+      soundtrack: 'Bandas sonoras',
+      mixtape: 'Mixtapes',
+      djMix: 'Mezclas de DJ',
+      demo: 'Demos',
+    },
+    variousArtists: 'Varios artistas',
+  },
+  sorting: {
+    button: 'Ordenar',
+    title: 'Ordenar por',
+    modes: {
+      name: 'Nombre',
+      artist: 'Artista',
+      album: 'Álbum',
+      date: 'Fecha',
+      duration: 'Duración',
+      count: 'Cantidad de canciones',
+      disc: 'Disco',
+      track: 'Pista',
+      added: 'Fecha agregada',
+    },
+    ascending: 'Ascendente',
+    descending: 'Descendente',
+  },
+  settings: {
+    open: 'Ajustes',
+    title: 'Ajustes',
+    close: 'Cerrar los ajustes',
+    library: 'Biblioteca',
+    rescan: 'Volver a escanear',
+    rescanHint: 'Lee los archivos nuevos o modificados.',
+    fullRescan: 'Escaneo completo',
+    fullRescanHint: 'Olvida las etiquetas leídas y vuelve a leer todos los archivos.',
+    autoReload: 'Recarga automática',
+    autoReloadHint: 'Vuelve a escanear sola cuando cambia la música del dispositivo y al volver a la app.',
+    content: 'Contenido',
+    excludeNonMusic: 'Excluir lo que no es música',
+    excludeNonMusicHint: 'Deja fuera podcasts, audiolibros, tonos de llamada, notificaciones, alarmas y grabaciones.',
+    includeHidden: 'Incluir archivos ocultos',
+    includeHiddenHint: 'Lee los archivos ocultos y los que están en carpetas ocultas.',
+    folders: 'Carpetas de música',
+    folderModes: { exclude: 'Excluir', include: 'Incluir solo' },
+    folderHint: {
+      exclude: 'Las carpetas activadas, y las carpetas que contienen, se dejan fuera.',
+      include: 'Solo se leen las carpetas activadas y las carpetas que contienen.',
+    },
+    noFolders: 'Aún no hay carpetas: la biblioteca no se ha leído.',
+    internal: 'Almacenamiento interno',
+    external: (name) => `Tarjeta SD (${name})`,
+    folderMeta: (where, n) => `${where}  ·  ${canciones(n)}`,
+    tags: 'Etiquetas',
+    separators: 'Separadores de varios valores',
+    separatorsHint:
+      'Separa los artistas, artistas del álbum y géneros que tienen varios valores. Una barra invertida antes de un separador lo mantiene en el nombre, como en AC\\/DC.',
+    separatorNames: {
+      ',': 'Coma (,)',
+      ';': 'Punto y coma (;)',
+      '/': 'Barra (/)',
+      '+': 'Más (+)',
+      '&': 'Et (&)',
+    },
+    smartSort: 'Orden inteligente',
+    smartSortHint: 'Ordena los nombres sin contar artículos como "The" o "El", y los números por su valor.',
+    covers: 'Portadas',
+    folderCovers: 'Portadas de la carpeta',
+    folderCoversHint: 'Muestra el cover.jpg o folder.jpg de la carpeta de una canción cuando no tiene portada propia.',
+    folderCoversDenied: 'Las portadas de la carpeta necesitan acceso a las imágenes de este dispositivo.',
+    statistics: 'Estadísticas',
+    stats: {
+      songs: 'Canciones',
+      albums: 'Álbumes',
+      artists: 'Artistas',
+      genres: 'Géneros',
+      duration: 'Duración total',
+      size: 'Tamaño total',
+    },
+    size: (bytes) => size(bytes, ['B', 'KB', 'MB', 'GB', 'TB'], ','),
   },
   search: {
     open: 'Buscar',
@@ -263,6 +503,7 @@ export const es: Messages = {
     variousArtists: 'Varios artistas',
     albums: (n) => (n === 1 ? '1 álbum' : `${n} álbumes`),
     artists: (n) => (n === 1 ? '1 artista' : `${n} artistas`),
+    genres: (n) => (n === 1 ? '1 género' : `${n} géneros`),
   },
   filters: {
     artist: 'Artista',

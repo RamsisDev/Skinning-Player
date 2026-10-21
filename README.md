@@ -35,11 +35,11 @@ adb shell content call --method scan_volume --uri content://media --arg external
 
 | Path | What lives there |
 |---|---|
-| `src/app/core/` | Tracks, the device music library, playlists, covers, the play queue and the audio engine. |
+| `src/app/core/` | Tracks and their tags, the device music library and its settings, albums, artists and genres, sorting, playlists, covers, the play queue and the audio engine. |
 | `src/app/skins/` | The skin format, its validator, the built-in skins and `SkinManager`. |
 | `src/app/ui/` | Skinned building blocks: buttons, icons, the tab menu, sheets, track rows. |
 | `src/app/widgets/` | Mini player, LCD display, visualizer and seek bar. |
-| `src/app/screens/` | Library, playlists, skins and the full-screen player. |
+| `src/app/screens/` | Library (songs, albums, artists, genres and their pages), search, settings, playlists, skins and the full-screen player. |
 | `src/app/i18n/` | The app's strings in English and Spanish, and the `I18n` service that picks one. |
 | `skins/` | Example skin files to copy to a phone and load. |
 
@@ -54,12 +54,58 @@ before it was added needs rebuilding (`npm run android`); until then the app sta
 
 ## Song details, search and filters
 
-Each song is named by its file's tags: title, artist, album, genre and year, from an ID3v2 or
-ID3v1 tag (MP3, and a WAV's `id3 ` chunk), a WAV's LIST INFO chunk, a FLAC or Ogg (Vorbis, Opus)
-stream's comments, or an M4A's iTunes atoms. Android's media store answers only file names, so
-the scan reads the tags from each file, only their headers and text; a file without tags is
-named from its file name ("Artist - Title.mp3"). Tags are kept in the cache with each file's
-modification time, so a rescan reads only the files that are new or changed.
+Each song is named by its file's tags: title, artists, album, album artists, genres, track and
+disc numbers, release and original dates, release type (MusicBrainz's "album", "EP", "single",
+"compilation", "soundtrack", "live"... and iTunes' compilation flag) and sort names, from an ID3v2
+or ID3v1.1 tag (MP3, and a WAV's `id3 ` chunk, including Picard's `TXXX` frames), a WAV's LIST
+INFO chunk, a FLAC or Ogg (Vorbis, Opus) stream's comments, or an M4A's iTunes atoms (freeform
+`----` atoms too). Android's media store answers only file names, so the scan reads the tags from
+each file, only their headers and text; a file without tags is named from its file name
+("03 - Artist - Title.mp3"). Tags are kept in the cache with each file's modification time, so a
+rescan reads only the files that are new or changed.
+
+## Albums, artists and genres
+
+The library tab has four lists: **Songs**, **Albums**, **Artists** and **Genres**, each
+sorted the way the user picks with the sort button (name, artist, album, date, duration, song
+count, date added; either way), and kept.
+
+- **An album** is its name and its album artists, so two "Greatest Hits" by different artists are
+  two albums; an album with no album artist is told apart by its folder. It opens with its songs
+  in disc and track order, under a heading per disc, with its release type, date and length; its
+  artist opens their page.
+- **An artist** opens with their albums under their release types (Albums, EPs, Singles,
+  Compilations...), the albums by others they **appear on**, and all their songs, newest first.
+- **A genre** opens with its artists and its songs.
+
+The search opens an album, artist or genre on that same page, and back returns to the search.
+
+Sorting is **intelligent** by default: "The Beatles" sorts under B and "Los
+Prisioneros" under P, numbers sort by their value ("2" before "10"), and a file's sort tags
+(`TSOP`, `ARTISTSORT`, `soar`...) win over the name.
+
+## Settings
+
+The gear in the header opens the settings:
+
+- **Rescan** reads the new and changed files; **Full rescan** forgets every tag read and reads
+  every file again. **Automatic reloading** rescans by itself, quietly, when the device's music
+  changes and whenever the app comes back to the front: Android's media library reports changes
+  to photos and videos, never to audio, so on Android the return is what finds new music.
+- **Exclude non-music** (on by default) leaves out podcasts, audiobooks, ringtones,
+  notifications, alarms and recordings, by the folders Android keeps them in. **Include hidden
+  files** reads the files in folders whose name starts with a dot.
+- **Music folders** lists every folder with audio, on the internal storage or an SD card, to
+  **exclude**, or to **include only**; a folder counts with the folders in it.
+- **Multi-value separators** choose what splits an artist, album artist or genre tag that holds
+  several values: `,` and `;` by default, and `/`, `+` and `&` on demand. A backslash keeps a
+  separator in a name (`AC/DC`). "feat." always separates a song's artists.
+- **Folder covers** shows a song's folder's `cover.jpg`, `folder.jpg`, `front.jpg`... (or
+  `.png`) when the song has no cover of its own. Turning it on asks for access to images, which
+  Android needs to read them; a development build made before it was added needs rebuilding
+  (`npm run android`).
+- **Statistics**: how many songs, albums, artists and genres the library has, how long it plays
+  and how much space it takes.
 
 The search matches every word typed against the title, artist, album, genre, year and file name,
 ignoring case and accents ("musica" finds "Música"). Under it, a filter for each detail the
@@ -139,7 +185,8 @@ so a skin only has to list what it changes (like a Winamp skin missing a bitmap)
 - **`icons`**: SVG markup per button, drawn in the button's color through `currentColor`. Slots:
   `play`, `pause`, `previous`, `next`, `shuffle`, `repeat`, `repeatOne`, `library`, `playlists`,
   `skins`, `add`, `addToPlaylist`, `more`, `close`, `back`, `remove`, `rename`, `search`,
-  `import`, `check`, `refresh`, `cover`, `warning`. `null` restores the default icon.
+  `import`, `check`, `refresh`, `cover`, `warning`, `settings`, `sort`. `null` restores the default
+  icon.
 - **`widgets`**: show or hide the visualizer (4 to 32 bars) and the mini player's display.
 - **`motion`**: `speed` from 0 to 4 (0 turns motion off), an `easing` (`linear`, `ease`,
   `ease-in`, `ease-out`, `ease-in-out`, `smooth`, `snappy`, `bouncy`), how a pressed button

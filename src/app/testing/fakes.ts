@@ -1,5 +1,8 @@
 import { type Provider, signal } from '@angular/core';
 import {
+  AppState,
+  type AppStateSource,
+  type AppStatus,
   type DeepLinkSource,
   DeepLinks,
   Dialogs,
@@ -145,6 +148,10 @@ export interface FakeMediaLibraryOptions {
   readonly unplayable?: readonly string[];
   /** Awaited before a query answers, given the offset it reads from, to hold a scan mid-way. */
   readonly beforePage?: (offset: number) => Promise<void> | void;
+  /** Where each file is, by id, for files outside `musicUri`'s folder. */
+  readonly uris?: Readonly<Record<string, string>>;
+  /** Handed a function that tells the app the device's music changed, once the app listens. */
+  readonly onListen?: (changed: () => void) => void;
 }
 
 /**
@@ -159,13 +166,24 @@ export function fakeMediaLibrary(
   const answers = [...(options.answers ?? [])];
   const scanErrors = [...(options.scanErrors ?? [])];
   const unplayable = new Set(options.unplayable ?? []);
-  let state: 'undetermined' | 'granted' | 'denied' | 'blocked' = 'undetermined';
-  const answer = () => ({
-    status: state === 'blocked' ? 'denied' : state,
-    granted: state === 'granted',
-    canAskAgain: state !== 'blocked',
-    expires: 'never',
-  });
+  type State = 'undetermined' | 'granted' | 'denied' | 'blocked';
+  // One permission per kind of media, as on Android 13 and later. Asked about no kind in
+  // particular, the module answers for every kind the manifest declares: the music and the images.
+  const states = new Map<string, State>([
+    ['audio', 'undetermined'],
+    ['photo', 'undetermined'],
+  ]);
+  const kindsOf = (kinds?: string[]) => (kinds?.length ? kinds : [...states.keys()]);
+  const answer = (kinds?: string[]) => {
+    const all = kindsOf(kinds).map((kind) => states.get(kind)!);
+    const state: State = all.every((s) => s === 'granted') ? 'granted' : all.find((s) => s !== 'granted')!;
+    return {
+      status: state === 'blocked' ? 'denied' : state,
+      granted: state === 'granted',
+      canAskAgain: state !== 'blocked',
+      expires: 'never',
+    };
+  };
   class Query {
     private from = 0;
     private count = Infinity;
@@ -191,6 +209,7 @@ export function fakeMediaLibrary(
         filename,
         duration: seconds === null ? null : seconds * 1000,
         modificationTime: modified ?? null,
+        creationTime: modified ?? null,
         mediaType: 'audio',
       }));
     }
@@ -199,18 +218,21 @@ export function fakeMediaLibrary(
     constructor(readonly id: string) {}
     async getUri(): Promise<string> {
       if (unplayable.has(this.id)) throw new Error(`No file for ${this.id}`);
-      return musicUri(this.id);
+      return options.uris?.[this.id] ?? musicUri(this.id);
     }
   }
   const source = {
-    getPermissionsAsync: async () => answer(),
-    requestPermissionsAsync: async () => {
+    getPermissionsAsync: async (_writeOnly?: boolean, kinds?: string[]) => answer(kinds),
+    requestPermissionsAsync: async (_writeOnly?: boolean, kinds?: string[]) => {
       const next = answers.shift() ?? 'grant';
-      state = next === 'grant' ? 'granted' : next === 'deny' ? 'denied' : 'blocked';
-      return answer();
+      for (const kind of kindsOf(kinds)) states.set(kind, next === 'grant' ? 'granted' : next === 'deny' ? 'denied' : 'blocked');
+      return answer(kinds);
     },
     presentPermissionsPicker: async () => {},
-    addListener: () => ({ remove() {} }),
+    addListener: (listener: (event: object) => void) => {
+      options.onListen?.(() => listener({ hasIncrementalChanges: false }));
+      return { remove() {} };
+    },
     Asset,
     Album: {},
     Query,
@@ -221,15 +243,32 @@ export function fakeMediaLibrary(
 /** Where the fake media store says a song's file is, for a test to put bytes there with `memoryFiles`. */
 export const musicUri = (id: string): string => `file:///music/${id}.mp3`;
 
+const MP3_FRAMES = {
+  title: 'TIT2',
+  artist: 'TPE1',
+  albumArtist: 'TPE2',
+  album: 'TALB',
+  genre: 'TCON',
+  year: 'TDRC',
+  track: 'TRCK',
+  disc: 'TPOS',
+  /** Written as MusicBrainz Picard writes it, in a TXXX frame. */
+  releaseType: 'TXXX',
+} as const;
+
 /** An MP3 whose ID3v2.4 tag names its song, and holds a JPEG front cover of `cover`'s bytes if given. */
 export function taggedMp3(
-  tags: Readonly<Partial<Record<'title' | 'artist' | 'album' | 'genre' | 'year', string>>>,
+  tags: Readonly<Partial<Record<keyof typeof MP3_FRAMES, string>>>,
   cover?: readonly number[],
 ): Uint8Array {
-  const ids = { title: 'TIT2', artist: 'TPE1', album: 'TALB', genre: 'TCON', year: 'TDRC' } as const;
   const syncsafe = (n: number) => [(n >> 21) & 0x7f, (n >> 14) & 0x7f, (n >> 7) & 0x7f, n & 0x7f];
   const frame = (id: string, body: number[]) => [...id].map((c) => c.charCodeAt(0)).concat(syncsafe(body.length), [0, 0], body);
-  const frames = Object.entries(tags).flatMap(([field, text]) => frame(ids[field as keyof typeof ids], [3, ...new TextEncoder().encode(text)]));
+  const utf8 = (text: string) => [...new TextEncoder().encode(text)];
+  const frames = Object.entries(tags).flatMap(([field, text]) =>
+    field === 'releaseType'
+      ? frame('TXXX', [3, ...utf8('MusicBrainz Album Type'), 0, ...utf8(text)])
+      : frame(MP3_FRAMES[field as keyof typeof MP3_FRAMES], [3, ...utf8(text)]),
+  );
   if (cover) frames.push(...frame('APIC', [0, ...[...'image/jpeg'].map((c) => c.charCodeAt(0)), 0, 3, 0, ...cover]));
   return Uint8Array.from([0x49, 0x44, 0x33, 4, 0, 0, ...syncsafe(frames.length), ...frames, 0xff, 0xfb, 0x90, 0x64]);
 }
@@ -334,6 +373,37 @@ export function fakeHardwareBack(): FakeHardwareBack {
       const handled = [...listeners].reverse().some((listener) => listener());
       await settle();
       return handled;
+    },
+  };
+}
+
+export interface FakeAppState {
+  readonly provider: Provider;
+  /**
+   * Moves the app through the states given, all at once: on a device JavaScript does not run in
+   * the background, so leaving and coming back arrive together, as `move('background', 'active')`.
+   */
+  move(...states: AppStatus[]): Promise<void>;
+}
+
+export function fakeAppState(): FakeAppState {
+  let state: AppStatus = 'active';
+  const listeners = new Set<(state: AppStatus) => void>();
+  const source: AppStateSource = {
+    current: () => state,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+  };
+  return {
+    provider: { provide: AppState.SOURCE, useValue: source },
+    async move(...states) {
+      for (const next of states) {
+        state = next;
+        for (const listener of listeners) listener(next);
+      }
+      await settle();
     },
   };
 }

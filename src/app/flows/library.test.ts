@@ -83,7 +83,7 @@ test('says why the music could not be read, and lists the songs after trying aga
   expect(screen.queryByText('Could not read your music')).toBeNull();
 });
 
-test('names each song from its file, sorted by title, and leaves out a file with no name', async () => {
+test('names each song from its file, sorted by title past its article, and leaves out a file with no name', async () => {
   await launch([
     ['1', 'Daft Punk - Digital Love.mp3', 301],
     ['2', 'Interlude.mp3', 75],
@@ -96,7 +96,8 @@ test('names each song from its file, sorted by title, and leaves out a file with
   const interlude = screen.getByRole('button', { name: 'Interlude' });
   const laFemme = screen.getByRole('button', { name: 'La Femme d Argent, Air' });
 
-  const rows = [digitalLove, interlude, laFemme];
+  // "La" is an article, so "La Femme d Argent" sorts under F.
+  const rows = [digitalLove, laFemme, interlude];
   expect(screen.getAllByRole('button').filter((node) => rows.includes(node))).toEqual(rows);
   expect(within(interlude).getByText('Unknown artist  ·  1:15')).toBeTruthy();
   expect(within(laFemme).getByText('Air')).toBeTruthy();

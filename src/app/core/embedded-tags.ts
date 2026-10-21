@@ -1,5 +1,6 @@
 /**
- * The details an audio file carries about its song: title, artist, album, genre and year. Android's
+ * The details an audio file carries about its song: title, artists, album, album artists, genres,
+ * dates, track and disc numbers, release type and sort names. Android's
  * media store indexes them but answers only file names, so the app reads them from the file, as it
  * does covers: an ID3v2 tag at the head (MP3, some FLAC) or in a WAV's `id3 ` chunk, an ID3v1 tag
  * at the end of an MP3, a WAV's LIST INFO chunk, the comments of a FLAC or Ogg (Vorbis, Opus)
@@ -10,17 +11,52 @@ import { type ByteReader, subReader } from './byte-reader.ts';
 import { type Box, findBox } from './embedded-cover.ts';
 import { type Id3Frame, id3Frames, id3TagSize } from './id3-cover.ts';
 
+/**
+ * A song's tags. A field a file can hold several of (artists, album artists, genres, release
+ * types) is a list of the values the file itself separates; separators written inside one value,
+ * such as "A, B", are split later, by the separators the user chose.
+ */
 export interface Tags {
   readonly title?: string;
-  readonly artist?: string;
+  readonly artists?: readonly string[];
   readonly album?: string;
-  readonly genre?: string;
-  /** Four digits. */
-  readonly year?: string;
+  readonly albumArtists?: readonly string[];
+  readonly genres?: readonly string[];
+  /** When this release came out: `YYYY`, `YYYY-MM` or `YYYY-MM-DD`. */
+  readonly date?: string;
+  /** When the music first came out, for a reissue or a remaster; the same form as `date`. */
+  readonly originalDate?: string;
+  readonly track?: number;
+  readonly disc?: number;
+  /** MusicBrainz's words for the release: "album", "ep", "single", "compilation", "live"... */
+  readonly releaseTypes?: readonly string[];
+  /** iTunes' compilation flag, for a release by various artists. */
+  readonly compilation?: boolean;
+  readonly titleSort?: string;
+  readonly artistSort?: string;
+  readonly albumSort?: string;
+  readonly albumArtistSort?: string;
 }
 
-type Field = keyof Tags | 'albumArtist';
-type Found = Partial<Record<Field, string>>;
+type Field =
+  | 'title'
+  | 'artist'
+  | 'album'
+  | 'albumArtist'
+  | 'genre'
+  | 'date'
+  | 'dayMonth'
+  | 'originalDate'
+  | 'track'
+  | 'disc'
+  | 'releaseType'
+  | 'compilation'
+  | 'titleSort'
+  | 'artistSort'
+  | 'albumSort'
+  | 'albumArtistSort';
+/** The values each field was given, by the first tag that names it. */
+type Found = Partial<Record<Field, string[]>>;
 
 /** Past this, a text field is more likely corrupt, or lyrics, than a name. */
 const MAX_TEXT_BYTES = 16_384;
@@ -52,23 +88,71 @@ export function embeddedTags(file: ByteReader): Tags {
 }
 
 /** Sets a field the file has not named yet: the tag read first wins. */
-function fill(found: Found, field: Field, value: string | undefined): void {
-  const text = value?.trim();
-  if (text && !found[field]) found[field] = text;
+function fill(found: Found, field: Field, value: string | readonly (string | undefined)[] | undefined): void {
+  const values = (typeof value === 'string' ? [value] : (value ?? [])).map((text) => text?.trim() ?? '').filter(Boolean);
+  if (values.length && !found[field]) found[field] = values;
+}
+
+const tidy = (text: string) => text.replace(/[\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Each value once, tidied, in the order the file gives them. */
+function list(values: readonly string[] | undefined): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of (values ?? []).map(tidy)) {
+    if (!value || seen.has(value.toLowerCase())) continue;
+    seen.add(value.toLowerCase());
+    out.push(value);
+  }
+  return out;
+}
+
+/** "3", "03" or "3/12": the number before the total, when there is one. */
+function position(values: readonly string[] | undefined): number | undefined {
+  const n = Number(/^\s*0*(\d{1,4})/.exec(values?.[0] ?? '')?.[1]);
+  return n > 0 ? n : undefined;
+}
+
+/**
+ * A date as precise as the tag gives it: "2004", "2004-05" or "2004-05-12", from ISO 8601,
+ * "2004/05/12", "2004.05.12" or "20040512". An ID3v2.3 year is refined by its `TDAT`, "DDMM".
+ */
+export function parseDate(text: string | undefined, dayMonth?: string): string | undefined {
+  const match = /^\s*(\d{4})(?:[-/.]?(\d{2})(?:[-/.]?(\d{2}))?)?/.exec(text ?? '');
+  if (!match || match[1] === '0000') return undefined;
+  const [, year, month, day] = match;
+  const valid = (value: string | undefined, max: number) => !!value && Number(value) >= 1 && Number(value) <= max;
+  if (valid(month, 12)) return valid(day, 31) ? `${year}-${month}-${day}` : `${year}-${month}`;
+  const ddmm = /^(\d{2})(\d{2})$/.exec(dayMonth ?? '');
+  if (ddmm && valid(ddmm[2], 12) && valid(ddmm[1], 31)) return `${year}-${ddmm[2]}-${ddmm[1]}`;
+  return year;
 }
 
 function clean(found: Found): Tags {
-  const tags: { -readonly [K in keyof Tags]: string } = {};
-  const tidy = (text: string | undefined) => text?.replace(/[\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim();
-  for (const field of ['title', 'artist', 'album', 'genre'] as const) {
-    const text = tidy(found[field]);
-    if (text) tags[field] = text;
+  const tags: { -readonly [K in keyof Tags]: Tags[K] } = {};
+  const text = (field: Field) => list(found[field])[0];
+  const title = text('title');
+  if (title) tags.title = title;
+  const album = text('album');
+  if (album) tags.album = album;
+  const multi = { artists: 'artist', albumArtists: 'albumArtist', genres: 'genre', releaseTypes: 'releaseType' } as const;
+  for (const [key, field] of Object.entries(multi) as [keyof typeof multi, Field][]) {
+    const values = list(found[field]);
+    if (values.length) tags[key] = values;
   }
-  // The album artist stands in for a track's own artist when the file names none.
-  const albumArtist = tidy(found.albumArtist);
-  if (!tags.artist && albumArtist) tags.artist = albumArtist;
-  const year = /\d{4}/.exec(found.year ?? '')?.[0];
-  if (year && year !== '0000') tags.year = year;
+  const date = parseDate(text('date'), text('dayMonth'));
+  if (date) tags.date = date;
+  const originalDate = parseDate(text('originalDate'));
+  if (originalDate) tags.originalDate = originalDate;
+  const track = position(found.track);
+  if (track) tags.track = track;
+  const disc = position(found.disc);
+  if (disc) tags.disc = disc;
+  if (/^(1|true|yes)$/i.test(text('compilation') ?? '')) tags.compilation = true;
+  for (const field of ['titleSort', 'artistSort', 'albumSort', 'albumArtistSort'] as const) {
+    const value = text(field);
+    if (value) tags[field] = value;
+  }
   return tags;
 }
 
@@ -85,24 +169,64 @@ const ID3_FIELDS: Readonly<Record<string, Field>> = {
   TAL: 'album',
   TCON: 'genre',
   TCO: 'genre',
-  TDRC: 'year',
-  TYER: 'year',
-  TYE: 'year',
-  TDOR: 'year',
-  TORY: 'year',
+  TDRC: 'date',
+  TDRL: 'date',
+  TYER: 'date',
+  TYE: 'date',
+  TDAT: 'dayMonth',
+  TDA: 'dayMonth',
+  TDOR: 'originalDate',
+  TORY: 'originalDate',
+  TOR: 'originalDate',
+  TRCK: 'track',
+  TRK: 'track',
+  TPOS: 'disc',
+  TPA: 'disc',
+  TCMP: 'compilation',
+  TCP: 'compilation',
+  TSOT: 'titleSort',
+  TST: 'titleSort',
+  TSOP: 'artistSort',
+  TSP: 'artistSort',
+  TSOA: 'albumSort',
+  TSA: 'albumSort',
+  TSO2: 'albumArtistSort',
+  TS2: 'albumArtistSort',
+};
+
+/**
+ * The fields taggers such as MusicBrainz Picard write under a name of their own, uppercased: an
+ * ID3v2 `TXXX` frame's description, a Vorbis comment's key, an MP4 freeform atom's name.
+ */
+const CUSTOM_FIELDS: Readonly<Record<string, Field>> = {
+  'MUSICBRAINZ ALBUM TYPE': 'releaseType',
+  MUSICBRAINZ_ALBUMTYPE: 'releaseType',
+  RELEASETYPE: 'releaseType',
+  'RELEASE TYPE': 'releaseType',
+  ORIGINALDATE: 'originalDate',
+  ORIGINALYEAR: 'originalDate',
+  'ORIGINAL DATE': 'originalDate',
+  ALBUMARTIST: 'albumArtist',
+  'ALBUM ARTIST': 'albumArtist',
+  ALBUMARTISTSORT: 'albumArtistSort',
+  COMPILATION: 'compilation',
 };
 
 function fromId3(frames: Iterable<Id3Frame>, found: Found): void {
   for (const frame of frames) {
-    const field = ID3_FIELDS[frame.id];
-    if (!field || frame.size > MAX_TEXT_BYTES) continue;
+    const custom = frame.id === 'TXXX' || frame.id === 'TXX';
+    const known = ID3_FIELDS[frame.id];
+    if ((!known && !custom) || frame.size > MAX_TEXT_BYTES) continue;
     const body = frame.read();
     // 2.4 separates the values of a field with a zero; each may carry its own byte-order mark.
     const values = decode(body.subarray(1), body[0]!)
       .split('\0')
-      .map((value) => value.replace(/\uFEFF/g, '').trim())
-      .filter(Boolean);
-    fill(found, field, (field === 'genre' ? values.map(id3Genre) : values).filter(Boolean).join(', '));
+      .map((value) => value.replace(/\uFEFF/g, '').trim());
+    // A user-defined frame is its description, then its values.
+    const field = custom ? CUSTOM_FIELDS[(values.shift() ?? '').toUpperCase()] : known;
+    if (!field) continue;
+    const kept = values.filter(Boolean);
+    fill(found, field, field === 'genre' ? kept.map(id3Genre) : kept);
   }
 }
 
@@ -138,8 +262,10 @@ function id3v1Tags(file: ByteReader, found: Found): void {
   fill(found, 'title', text(3, 30));
   fill(found, 'artist', text(33, 30));
   fill(found, 'album', text(63, 30));
-  fill(found, 'year', text(93, 4));
+  fill(found, 'date', text(93, 4));
   fill(found, 'genre', ID3V1_GENRES[tag[127]!]);
+  // ID3v1.1 gives the comment's last byte to the track number, after a zero.
+  if (tag[125] === 0 && tag[126]) fill(found, 'track', String(tag[126]));
 }
 
 // FLAC and Ogg
@@ -191,14 +317,18 @@ function oggTags(file: ByteReader, at: number, found: Found): void {
 }
 
 const VORBIS_FIELDS: Readonly<Record<string, Field>> = {
+  ...CUSTOM_FIELDS,
   TITLE: 'title',
   ARTIST: 'artist',
-  ALBUMARTIST: 'albumArtist',
-  'ALBUM ARTIST': 'albumArtist',
   ALBUM: 'album',
   GENRE: 'genre',
-  DATE: 'year',
-  YEAR: 'year',
+  DATE: 'date',
+  YEAR: 'date',
+  TRACKNUMBER: 'track',
+  DISCNUMBER: 'disc',
+  TITLESORT: 'titleSort',
+  ARTISTSORT: 'artistSort',
+  ALBUMSORT: 'albumSort',
 };
 
 /** A vendor string, then `KEY=value` comments in UTF-8, each after its length. A key may repeat. */
@@ -218,7 +348,7 @@ function vorbisComments(b: Uint8Array, found: Found): void {
     const field = equals > 0 ? VORBIS_FIELDS[ascii(comment, 0, equals).toUpperCase()] : undefined;
     if (field && length <= MAX_TEXT_BYTES) (values[field] ??= []).push(utf8(comment.subarray(equals + 1)).trim());
   }
-  for (const field of Object.keys(values) as Field[]) fill(found, field, values[field]!.filter(Boolean).join(', '));
+  for (const field of Object.keys(values) as Field[]) fill(found, field, values[field]);
 }
 
 // WAV
@@ -247,7 +377,9 @@ const INFO_FIELDS: Readonly<Record<string, Field>> = {
   IART: 'artist',
   IPRD: 'album',
   IGNR: 'genre',
-  ICRD: 'year',
+  ICRD: 'date',
+  ITRK: 'track',
+  IPRT: 'track',
 };
 
 function riffInfo(b: Uint8Array, found: Found): void {
@@ -265,17 +397,27 @@ function riffInfo(b: Uint8Array, found: Found): void {
 
 // MP4
 
-const MP4_FIELDS: readonly (readonly [string, Field])[] = [
-  ['\u00a9nam', 'title'],
-  ['\u00a9ART', 'artist'],
-  ['aART', 'albumArtist'],
-  ['\u00a9alb', 'album'],
-  ['\u00a9gen', 'genre'],
-  ['gnre', 'genre'],
-  ['\u00a9day', 'year'],
-];
+const MP4_FIELDS: Readonly<Record<string, Field>> = {
+  '\u00a9nam': 'title',
+  '\u00a9ART': 'artist',
+  aART: 'albumArtist',
+  '\u00a9alb': 'album',
+  '\u00a9gen': 'genre',
+  gnre: 'genre',
+  '\u00a9day': 'date',
+  trkn: 'track',
+  disk: 'disc',
+  cpil: 'compilation',
+  sonm: 'titleSort',
+  soar: 'artistSort',
+  soal: 'albumSort',
+  soaa: 'albumArtistSort',
+};
 
-/** The iTunes atoms in `moov/udta/meta/ilst`, each holding a `data` atom: a type, a locale, then the value. */
+/**
+ * The iTunes atoms in `moov/udta/meta/ilst`, each holding `data` atoms: a type, a locale, then the
+ * value. A freeform `----` atom names its field in a `name` atom, as Picard writes MusicBrainz's.
+ */
 function mp4Tags(file: ByteReader, at: number, found: Found): void {
   let box: Box | null = { start: at, end: file.size };
   for (const type of ['moov', 'udta', 'meta', 'ilst']) {
@@ -284,13 +426,45 @@ function mp4Tags(file: ByteReader, at: number, found: Found): void {
     box = findBox(file, start, box.end, type);
     if (!box) return;
   }
-  for (const [type, field] of MP4_FIELDS) {
-    const item = findBox(file, box.start, box.end, type);
-    const data = item && findBox(file, item.start, item.end, 'data');
-    if (!data || data.end - data.start > MAX_TEXT_BYTES) continue;
-    const value = file.read(data.start, data.end - data.start).subarray(8);
-    // `gnre` is an ID3v1 genre number, plus one, in two bytes.
-    fill(found, field, type === 'gnre' ? ID3V1_GENRES[((value[0]! << 8) | value[1]!) - 1] : utf8(value));
+  for (const item of children(file, box.start, box.end)) {
+    const field = item.type === '----' ? freeformField(file, item) : MP4_FIELDS[item.type];
+    if (!field) continue;
+    const values = [...children(file, item.start, item.end)]
+      .filter((child) => child.type === 'data' && child.end - child.start <= MAX_TEXT_BYTES)
+      .map((data) => mp4Value(item.type, file.read(data.start, data.end - data.start).subarray(8)));
+    fill(found, field, values);
+  }
+}
+
+function freeformField(file: ByteReader, item: Atom): Field | undefined {
+  const name = [...children(file, item.start, item.end)].find((child) => child.type === 'name');
+  // `name` is a full box: its text follows a version and flags.
+  return name ? CUSTOM_FIELDS[utf8(file.read(name.start + 4, name.end - name.start - 4)).toUpperCase()] : undefined;
+}
+
+/** A value as text, from the atoms that hold numbers too: a genre, a track or disc, a flag. */
+function mp4Value(type: string, value: Uint8Array): string | undefined {
+  // `gnre` is an ID3v1 genre number, plus one, in two bytes.
+  if (type === 'gnre') return ID3V1_GENRES[((value[0]! << 8) | value[1]!) - 1];
+  // `trkn` and `disk`: two reserved bytes, then the position and the total, two bytes each.
+  if (type === 'trkn' || type === 'disk') return String((value[2]! << 8) | value[3]!);
+  if (type === 'cpil') return String(value[0] ?? 0);
+  return utf8(value);
+}
+
+interface Atom extends Box {
+  readonly type: string;
+}
+
+/** The boxes between `from` and `to`, each by its type and body. */
+function* children(file: ByteReader, from: number, to: number): Generator<Atom> {
+  let at = from;
+  while (at + 8 <= to) {
+    const header = file.read(at, 8);
+    const size = ((header[0]! << 24) | (header[1]! << 16) | (header[2]! << 8) | header[3]!) >>> 0;
+    if (size < 8) return;
+    yield { type: ascii(header, 4, 8), start: at + 8, end: Math.min(at + size, to) };
+    at += size;
   }
 }
 

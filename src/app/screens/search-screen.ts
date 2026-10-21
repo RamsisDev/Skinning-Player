@@ -2,6 +2,7 @@ import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { Pressable, ScrollView, Text, TextInput, View, VirtualList, VirtualListRow } from '@ng-native/components';
 import { Dialogs, HardwareBack, Keyboard } from '@ng-native/device';
 import { Storage } from '@ng-native/expo/async-storage';
+import { CatalogService } from '../core/catalog.ts';
 import { type Group, groupsOf } from '../core/library-filter.ts';
 import { MusicLibrary } from '../core/music-library.ts';
 import { Player, type QueueSource } from '../core/player.ts';
@@ -295,6 +296,7 @@ export class SearchScreen {
   protected readonly library = inject(MusicLibrary);
   protected readonly player = inject(Player);
   private readonly playlists = inject(Playlists);
+  private readonly catalog = inject(CatalogService).catalog;
   private readonly navigation = inject(Navigation);
   private readonly playerView = inject(PlayerView);
   private readonly dialogs = inject(Dialogs);
@@ -356,17 +358,18 @@ export class SearchScreen {
     const t = this.t();
     if (row.kind === 'playlist') return t.common.songs(row.playlist.trackIds.length);
     if (row.kind !== 'group') return '';
-    const { facet, tracks } = row.group;
+    const { facet, key, tracks } = row.group;
     const songs = t.common.songs(tracks.length);
+    // Described as their own pages describe them, so the two agree.
+    const catalog = this.catalog();
     if (facet === 'album') {
-      const artists = new Set(tracks.map((track) => track.artist));
-      const [artist] = artists;
-      return [artists.size > 1 ? t.search.variousArtists : artist || t.common.unknownArtist, songs].join('  ·  ');
+      const album = catalog.album.get(key);
+      const artist = album?.various ? t.search.variousArtists : album?.artist || t.common.unknownArtist;
+      return [artist, songs].join('  ·  ');
     }
-    const counted = facet === 'artist' ? 'album' : 'artist';
-    const count = groupsOf(tracks, counted).length;
+    const count = facet === 'artist' ? (catalog.artist.get(key)?.albums.length ?? 0) : groupsOf(tracks, 'artist').length;
     if (!count) return songs;
-    return [counted === 'album' ? t.search.albums(count) : t.search.artists(count), songs].join('  ·  ');
+    return [facet === 'artist' ? t.search.albums(count) : t.search.artists(count), songs].join('  ·  ');
   }
 
   protected isSelected(row: SearchRow): boolean {
@@ -519,9 +522,11 @@ export class SearchScreen {
     this.dialogs.notify(this.t().common.addedToQueue);
   }
 
-  /** Opens the library on an album's, artist's or genre's songs. */
+  /** Opens an album, artist or genre on its own screen, and a year as the library filtered to it. */
   private showGroup(group: Group): void {
-    this.navigation.show({ tab: 'library', filters: { [group.facet]: group.key } });
+    const { facet, key } = group;
+    if (facet === 'year') this.navigation.show({ tab: 'library', filters: { year: key } });
+    else this.navigation.show({ tab: 'library', detail: { kind: facet, key } });
   }
 
   /** The artist of these songs, or a choice among them when there are several. */

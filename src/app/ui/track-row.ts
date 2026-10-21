@@ -8,8 +8,9 @@ import { CoverArt } from './cover-art.ts';
 import { SkinIcon } from './skin-icon.ts';
 
 /**
- * One track in a list, led by a thumbnail of its cover. Trailing buttons are projected, and win
- * the press over the row. A track that failed to play carries a warning that explains why.
+ * One track in a list, led by a thumbnail of its cover, or in an album by its track number.
+ * Trailing buttons are projected, and win the press over the row. A track that failed to play
+ * carries a warning that explains why.
  */
 @Component({
   selector: 'app-track-row',
@@ -26,7 +27,11 @@ import { SkinIcon } from './skin-icon.ts';
       (press)="press.emit()"
       (longPress)="longPress.emit()"
     >
-      <app-cover-art [track]="track()" [size]="44" [radius]="6" />
+      @if (number() === undefined) {
+        <app-cover-art [track]="track()" [size]="44" [radius]="6" />
+      } @else {
+        <text class="number">{{ number() ?? '-' }}</text>
+      }
       <view class="body">
         <text class="title" [numberOfLines]="1">{{ track().title }}</text>
         <text class="meta" [numberOfLines]="1">{{ meta() }}</text>
@@ -71,6 +76,14 @@ import { SkinIcon } from './skin-icon.ts';
     .current .title {
       color: var(--sk-accent);
     }
+    .number {
+      width: 32px;
+      color: var(--sk-text-muted);
+      font-family: var(--sk-display-font);
+      font-size: var(--sk-font-sm);
+      font-weight: var(--sk-display-weight);
+      text-align: center;
+    }
     .body {
       flex: 1;
       gap: 2px;
@@ -103,12 +116,17 @@ export class TrackRow {
   readonly track = input.required<Track>();
   readonly current = input(false);
   readonly selected = input(false);
+  /** Shown in place of the cover when given, as an album lists its songs; null for a song with none. */
+  readonly number = input<number | null | undefined>(undefined);
+  /** Leaves the album out of the details, for a list of the album's own songs. */
+  readonly hideAlbum = input(false);
   readonly press = output<void>();
   readonly longPress = output<void>();
 
   protected readonly meta = computed(() => {
     const { artist, album, duration } = this.track();
-    return [artist || this.t().common.unknownArtist, album, duration ? formatTime(duration) : ''].filter(Boolean).join('  ·  ');
+    const shownAlbum = this.hideAlbum() ? '' : album;
+    return [artist || this.t().common.unknownArtist, shownAlbum, duration ? formatTime(duration) : ''].filter(Boolean).join('  ·  ');
   });
   protected readonly accessibleName = computed(() => {
     const { title, artist } = this.track();
