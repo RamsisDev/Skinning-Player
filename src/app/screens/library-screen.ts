@@ -32,7 +32,7 @@ import { FilterSheet } from './filter-sheet.ts';
 import { SongMenu } from './song-menu.ts';
 
 /**
- * The library, in Auxio's tabs: its songs, albums, artists and genres. The songs are searchable,
+ * The library, in tabs: its songs, albums, artists and genres. The songs are searchable,
  * sorted as the user chose and filtered by the details they have: a filter for each of artist,
  * album, genre and year the library knows, offering only the values left among the songs on show.
  * The tabs on show and their order are the user's. A tap on a song plays from it, from the list or
@@ -325,7 +325,7 @@ export class LibraryScreen {
     if (this.library.status() === 'idle') void this.library.scan();
     const release = inject(HardwareBack).handle(() => {
       const depth = this.details().length;
-      // The first screen opened from the search goes back to the search, as in Auxio.
+      // The first screen opened from the search goes back to the search.
       if (!depth || (depth === 1 && this.navigation.fromSearch())) return false;
       this.details.update((details) => details.slice(0, -1));
       return true;

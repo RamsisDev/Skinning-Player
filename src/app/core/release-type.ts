@@ -1,5 +1,5 @@
 /**
- * What kind of release an album is, read the way Auxio reads MusicBrainz's release types: a
+ * What kind of release an album is, read from MusicBrainz's release types: a
  * primary type (album, EP, single), refined by the secondary ones that say more, such as a
  * compilation, a soundtrack or a live recording.
  */

@@ -16,8 +16,7 @@ export type Destination =
 
 /**
  * The tab on show, and the search or settings that cover the tabs while they are open. Leaving the
- * search for one of its results keeps what was typed, so back returns to the search as it was, as
- * in Auxio.
+ * search for one of its results keeps what was typed, so back returns to the search as it was.
  */
 @Service()
 export class Navigation {

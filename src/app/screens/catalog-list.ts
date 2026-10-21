@@ -32,7 +32,7 @@ export function sourceOf(row: CatalogRow): QueueSource {
 }
 
 /**
- * The library's albums, artists or genres, as Auxio lists them in its tabs: each with its cover,
+ * The library's albums, artists or genres, as listed in its tabs: each with its cover,
  * a line about it and a menu, sorted the way the user chose. A tap opens it.
  */
 @Component({

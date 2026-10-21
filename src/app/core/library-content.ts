@@ -98,7 +98,7 @@ export type Volume = { readonly kind: 'internal' } | { readonly kind: 'external'
 const INTERNAL = /^\/storage\/emulated\/\d+(?=\/|$)|^\/sdcard(?=\/|$)/;
 const EXTERNAL = /^\/storage\/([^/]+)(?=\/|$)/;
 
-/** The folder's volume, and its path inside that volume, as Auxio shows a folder. */
+/** The folder's volume, and its path inside that volume, as a folder is shown. */
 export function locate(path: string): { readonly volume: Volume; readonly inside: string } {
   const internal = INTERNAL.exec(path);
   if (internal) return { volume: { kind: 'internal' }, inside: path.slice(internal[0].length) || '/' };

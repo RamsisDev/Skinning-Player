@@ -22,7 +22,7 @@ export interface FacetValue {
 
 /**
  * Which album a track is on. Two albums can share a name, such as "Greatest Hits", so the name is
- * not enough: an album is its name and its album artists, as in Auxio, or without album artists,
+ * not enough: an album is its name and its album artists, or without album artists,
  * its name and the folder its songs are in.
  */
 export function albumKey(track: Track): string {

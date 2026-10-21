@@ -24,7 +24,7 @@ export interface Album extends Sortable {
   readonly discs: number;
 }
 
-/** A name that sings songs or has albums, which Auxio lists as one artist either way. */
+/** A name that sings songs or has albums, listed as one artist either way. */
 export interface Artist extends Sortable {
   readonly key: string;
   readonly sortName: string;

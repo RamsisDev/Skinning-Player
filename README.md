@@ -66,7 +66,7 @@ rescan reads only the files that are new or changed.
 
 ## Albums, artists and genres
 
-The library tab has Auxio's four lists: **Songs**, **Albums**, **Artists** and **Genres**, each
+The library tab has four lists: **Songs**, **Albums**, **Artists** and **Genres**, each
 sorted the way the user picks with the sort button (name, artist, album, date, duration, song
 count, date added; either way), and kept.
 
@@ -80,7 +80,7 @@ count, date added; either way), and kept.
 
 The search opens an album, artist or genre on that same page, and back returns to the search.
 
-Sorting is **intelligent** by default, as Auxio's: "The Beatles" sorts under B and "Los
+Sorting is **intelligent** by default: "The Beatles" sorts under B and "Los
 Prisioneros" under P, numbers sort by their value ("2" before "10"), and a file's sort tags
 (`TSOP`, `ARTISTSORT`, `soar`...) win over the name.
 

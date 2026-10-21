@@ -27,7 +27,7 @@ const HEADER_HEIGHT = 40;
 const ROW_HEIGHT = 64;
 
 /**
- * Auxio's search: songs, albums, artists, genres and playlists found by name as the query is typed,
+ * The search: songs, albums, artists, genres and playlists found by name as the query is typed,
  * each kind under its own heading, narrowed by filters that are kept between visits. A song plays
  * from it among all the songs; anything else opens what it is. Each has a menu, and a long press
  * starts a selection that is played, queued or filed all at once.
@@ -306,7 +306,7 @@ export class SearchScreen {
 
   protected readonly kinds = SEARCH_KINDS;
   protected readonly query = this.navigation.query;
-  /** The kinds the results are narrowed to, none meaning all of them; kept between visits, as in Auxio. */
+  /** The kinds the results are narrowed to, none meaning all of them; kept between visits. */
   protected readonly filters = inject(Storage).signal<SearchKind[]>('search.filters', []);
   /** The keyboard comes up for a new search, not for one that back returned to. */
   protected readonly autoFocus = !this.query();
@@ -314,7 +314,7 @@ export class SearchScreen {
 
   private readonly searchable = computed(() => searchable(this.library.tracks(), this.playlists.all()));
   protected readonly rows = computed(() => resultRows(search(this.searchable(), this.query(), this.filters())));
-  /** What is selected, by row key; it stays selected while the query changes, as in Auxio. */
+  /** What is selected, by row key; it stays selected while the query changes. */
   protected readonly selected = signal<ReadonlyMap<string, SearchRow>>(new Map());
   protected readonly menu = signal<Menu | null>(null);
   protected readonly adding = signal<readonly Track[] | null>(null);

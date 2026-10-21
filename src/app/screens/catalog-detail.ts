@@ -44,8 +44,7 @@ interface Detail {
 
 /**
  * An album with its songs in disc and track order, an artist with their albums by release type and
- * the albums they appear on, or a genre with its artists; and in each, its songs. As Auxio's detail
- * screens.
+ * the albums they appear on, or a genre with its artists; and in each, its songs.
  */
 @Component({
   selector: 'app-catalog-detail',

@@ -2,7 +2,7 @@ import { type Group, groupsOf, names } from './library-filter.ts';
 import { type Playlist } from './playlists.ts';
 import { type Track, fold } from './track.ts';
 
-/** What a search can be narrowed to, in the order Auxio offers its filters. */
+/** What a search can be narrowed to, in the order its filters are offered. */
 export const SEARCH_KINDS = ['songs', 'albums', 'artists', 'genres', 'playlists'] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
@@ -24,10 +24,10 @@ export type SearchRow =
   | { readonly kind: 'group'; readonly group: Group }
   | { readonly kind: 'playlist'; readonly playlist: Playlist };
 
-/** The sections in the order Auxio lists them. */
+/** The sections in the order they are listed. */
 const SECTIONS: readonly SearchKind[] = ['artists', 'albums', 'playlists', 'genres', 'songs'];
 
-/** ASCII punctuation, which Java's `\p{Punct}` is and Auxio drops from a name before its last try. */
+/** ASCII punctuation, which is dropped from a name before its last try. */
 const PUNCTUATION = /[!-/:-@[-`{-~]/g;
 
 export function searchable(tracks: readonly Track[], playlists: readonly Playlist[]): Searchable {
@@ -41,7 +41,7 @@ export function searchable(tracks: readonly Track[], playlists: readonly Playlis
 }
 
 /**
- * Whether a name holds the query, the way Auxio matches: the name as it is written, then without
+ * Whether a name holds the query: the name as it is written, then without
  * its accents and punctuation, so "acdc" finds "AC/DC". Case and accents are folded on both sides,
  * so "musica" and "música" both find "Música".
  */
@@ -54,7 +54,7 @@ export function nameMatches(name: string, query: string): boolean {
 
 /**
  * What the query finds among the kinds asked for, each by name; no kinds means all of them. A song
- * is also found by its file name. A blank query finds nothing, as in Auxio.
+ * is also found by its file name. A blank query finds nothing.
  */
 export function search(all: Searchable, query: string, kinds: readonly SearchKind[] = []): SearchResults {
   const wanted = (kind: SearchKind) => !!query.trim() && (!kinds.length || kinds.includes(kind));

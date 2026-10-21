@@ -11,7 +11,7 @@ export interface Sort {
 /** The lists the user can sort, each kept its own way: the songs, the albums, an album's songs... */
 export type SortedList = 'songs' | 'albums' | 'artists' | 'genres' | 'album';
 
-/** The modes each list offers, in the order they are offered, as Auxio offers them. */
+/** The modes each list offers, in the order they are offered. */
 export const SORT_MODES: Readonly<Record<SortedList, readonly SortMode[]>> = {
   songs: ['name', 'artist', 'album', 'date', 'duration', 'added'],
   albums: ['name', 'artist', 'date', 'duration', 'count', 'added'],
@@ -41,7 +41,7 @@ export interface Sortable {
 }
 
 /**
- * The articles that "intelligent" sorting skips at the start of a name, as Auxio skips "the" and
+ * The articles that "intelligent" sorting skips at the start of a name, such as "the" and
  * "an": "The Beatles" sorts under B, "Los Prisioneros" under P. Not "a", which in Spanish, Italian
  * and Portuguese is a preposition: "A Dios Le Pido" stays under A.
  */

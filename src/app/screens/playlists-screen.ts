@@ -229,7 +229,7 @@ export class PlaylistsScreen {
 
   constructor() {
     const release = inject(HardwareBack).handle(() => {
-      // A playlist opened from the search goes back to the search, as in Auxio.
+      // A playlist opened from the search goes back to the search.
       if (!this.openId() || this.navigation.fromSearch()) return false;
       this.openId.set(null);
       return true;

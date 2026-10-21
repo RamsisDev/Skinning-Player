@@ -6,7 +6,7 @@ import { DEFAULT_SEPARATORS, type Separator } from './track.ts';
 /** Whether the folders picked are the only ones read, or the ones left out. */
 export type FolderMode = 'exclude' | 'include';
 
-/** How the library is read, kept on the device: what Auxio offers under "Music" and "Content". */
+/** How the library is read, kept on the device: its music and content settings. */
 @Service()
 export class LibrarySettings {
   private readonly store = inject(Storage);
