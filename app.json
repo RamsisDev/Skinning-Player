@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Skinning Player",
+    "slug": "skinning-player",
+    "version": "1.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.skinningplayer.app"
+    },
+    "android": {
+      "package": "com.skinningplayer.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1020",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "scheme": "skinning-player",
+    "extra": {
+      "router": {
+        "root": "src/app"
+      }
+    },
+    "plugins": [
+      "@ng-native/metro",
+      [
+        "expo-media-library",
+        {
+          "granularPermissions": [
+            "audio"
+          ],
+          "photosPermission": "Allow Skinning Player to read the music on this device.",
+          "savePhotosPermission": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      "expo-font",
+      "expo-localization"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "id": "paper-blueprint",
+  "name": "Paper Blueprint",
+  "author": "Skinning Player",
+  "description": "The Paper skin, recolored in blueprint blue. Only what differs is listed.",
+  "extends": "paper",
+  "colors": {
+    "accent": "#1d4ed8",
+    "menuActiveText": "#1d4ed8",
+    "primaryBackground": "#1e3a8a",
+    "displayBackground": "#1e3a8a",
+    "displayText": "#dbeafe",
+    "progressFill": "#1d4ed8"
+  },
+  "shape": { "buttonRadius": 20 }
+}

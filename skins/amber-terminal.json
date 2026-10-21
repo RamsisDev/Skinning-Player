@@ -1,0 +1,59 @@
+{
+  "format": 1,
+  "id": "amber-terminal",
+  "name": "Amber Terminal",
+  "author": "Skinning Player",
+  "description": "A 1982 amber CRT: square everything, monospace everywhere.",
+  "extends": "classic",
+  "statusBar": "light",
+  "colors": {
+    "background": "#120b02",
+    "surface": "#1d1304",
+    "surfaceAlt": "#2a1b06",
+    "border": "#5c3b0a",
+    "text": "#ffb000",
+    "textMuted": "#b37a00",
+    "accent": "#ffcc33",
+    "accentText": "#120b02",
+    "menuBackground": "#0c0701",
+    "menuText": "#b37a00",
+    "menuActiveBackground": "#2a1b06",
+    "menuActiveText": "#ffcc33",
+    "buttonBackground": "#1d1304",
+    "buttonText": "#ffb000",
+    "buttonBorder": "#ffb000",
+    "primaryBackground": "#ffb000",
+    "primaryText": "#120b02",
+    "widgetBackground": "#0c0701",
+    "widgetBorder": "#ffb000",
+    "widgetText": "#ffb000",
+    "displayBackground": "#000000",
+    "displayText": "#ffb000",
+    "progressTrack": "#2a1b06",
+    "progressFill": "#ffb000"
+  },
+  "shape": { "radius": 0, "buttonRadius": 0, "widgetRadius": 0, "borderWidth": 2 },
+  "fonts": [
+    { "family": "VT323", "weight": 400, "src": "https://raw.githubusercontent.com/google/fonts/main/ofl/vt323/VT323-Regular.ttf" }
+  ],
+  "typography": {
+    "fontFamily": "monospace",
+    "displayFontFamily": "VT323",
+    "scale": 1,
+    "weights": { "regular": 400, "medium": 500, "bold": 800 }
+  },
+  "icons": {
+    "shuffle": "<svg viewBox=\"0 0 24 24\"><path fill=\"currentColor\" d=\"M3 6h5v2H3zM8 8h2v2H8zM10 10h2v4h-2zM12 14h2v2h-2zM14 16h5v2h-5zM14 6h5v2h-5zM12 8h2v2h-2zM8 14h2v2H8zM3 16h5v2H3zM19 4h2v6h-2zM19 14h2v6h-2z\"/></svg>",
+    "repeat": "<svg viewBox=\"0 0 24 24\"><path fill=\"currentColor\" d=\"M5 6h12v2H5zM3 8h2v6H3zM17 4h2v6h-2zM7 16h12v2H7zM19 10h2v6h-2zM5 14h2v6H5z\"/></svg>"
+  },
+  "widgets": { "visualizer": true, "visualizerBars": 16, "miniDisplay": true },
+  "motion": {
+    "speed": 1.5,
+    "easing": "linear",
+    "pressScale": 1,
+    "pressOpacity": 0.4,
+    "sheetTransition": "none",
+    "playerTransition": "fade",
+    "displayEffect": "flicker"
+  }
+}

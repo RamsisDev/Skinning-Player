@@ -1,0 +1,320 @@
+import { type Provider } from '@angular/core';
+import { type FakeFabricNode, render, screen, userEvent, waitFor, within } from '@ng-native/testing';
+import { expect, test } from 'vitest';
+import { App } from '../app.ts';
+import { SCAN_PAGE_SIZE } from '../core/music-library.ts';
+import {
+  type FakeMediaLibraryOptions,
+  engineProvider,
+  fakeDeepLinks,
+  fakeDialogs,
+  fakeDocumentPicker,
+  fakeEngine,
+  fakeMediaLibrary,
+  memoryFiles,
+  memoryStorage,
+} from '../testing/fakes.ts';
+
+type AudioFile = [id: string, filename: string | null, seconds: number | null];
+
+async function launch(files: AudioFile[], options: FakeMediaLibraryOptions = {}, more: Provider[] = []) {
+  const engine = fakeEngine();
+  const dialogs = fakeDialogs();
+  const deepLinks = fakeDeepLinks();
+  await render(App, {
+    providers: [
+      memoryStorage(),
+      engineProvider(engine),
+      fakeMediaLibrary(files, options),
+      dialogs.provider,
+      deepLinks.provider,
+      ...more,
+    ],
+  });
+  return { engine, dialogs, deepLinks, user: userEvent.setup() };
+}
+
+const songs = (): AudioFile[] => [
+  ['1', 'Daft Punk - Digital Love.mp3', 301],
+  ['2', 'Air - La Femme d Argent.mp3', 429],
+  ['3', 'Daft Punk - One More Time.mp3', 320],
+];
+
+function fullPlayer() {
+  let node: FakeFabricNode = screen.getByText('Now playing');
+  while (node.parent && !/Modal/.test(node.viewName)) node = node.parent;
+  return within(node);
+}
+
+const stateOf = (node: FakeFabricNode) => node.props['accessibilityState'];
+
+test('asks for music access again after the user refused it, and lists the songs once allowed', async () => {
+  const { user } = await launch(songs(), { answers: ['deny', 'grant'] });
+
+  expect(await screen.findByText('Your music lives on this device')).toBeTruthy();
+  expect(screen.queryByText('3 songs')).toBeNull();
+  await user.press(screen.getByRole('button', { name: 'Allow access to music' }));
+
+  expect(await screen.findByText('3 songs')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Digital Love, Daft Punk' })).toBeTruthy();
+});
+
+test('opens the system settings when access is off for good, and lists the songs after trying again', async () => {
+  const { user, deepLinks } = await launch(songs(), { answers: ['block'] });
+
+  expect(await screen.findByText('Music access is turned off')).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Open settings' }));
+  expect(deepLinks.settingsOpened).toBe(1);
+
+  await user.press(screen.getByRole('button', { name: 'Try again' }));
+  expect(await screen.findByText('3 songs')).toBeTruthy();
+});
+
+test('says why the music could not be read, and lists the songs after trying again', async () => {
+  const { user } = await launch(songs(), { scanErrors: ['The media store is busy.'] });
+
+  expect(await screen.findByText('Could not read your music')).toBeTruthy();
+  expect(screen.getByText('The media store is busy.')).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Try again' }));
+
+  expect(await screen.findByText('3 songs')).toBeTruthy();
+  expect(screen.queryByText('Could not read your music')).toBeNull();
+});
+
+test('names each song from its file, sorted by title, and leaves out a file with no name', async () => {
+  await launch([
+    ['1', 'Daft Punk - Digital Love.mp3', 301],
+    ['2', 'Interlude.mp3', 75],
+    ['3', null, 200],
+    ['4', '07 - Air - La_Femme_d_Argent.flac', null],
+  ]);
+
+  expect(await screen.findByText('3 songs')).toBeTruthy();
+  const digitalLove = screen.getByRole('button', { name: 'Digital Love, Daft Punk' });
+  const interlude = screen.getByRole('button', { name: 'Interlude' });
+  const laFemme = screen.getByRole('button', { name: 'La Femme d Argent, Air' });
+
+  expect(within(digitalLove).getByText('1')).toBeTruthy();
+  expect(within(interlude).getByText('2')).toBeTruthy();
+  expect(within(interlude).getByText('Unknown artist  ·  1:15')).toBeTruthy();
+  expect(within(laFemme).getByText('3')).toBeTruthy();
+  expect(within(laFemme).getByText('Air')).toBeTruthy();
+});
+
+test('shows a loading screen that counts the songs while a large library is read a page at a time', async () => {
+  const files: AudioFile[] = Array.from({ length: 600 }, (_, i) => [String(i), `Artist - Song ${i}.mp3`, 120]);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const offsets: number[] = [];
+  await launch(files, {
+    beforePage: (offset) => {
+      offsets.push(offset);
+      return offset === SCAN_PAGE_SIZE ? held : undefined;
+    },
+  });
+
+  expect(await screen.findByRole('progressbar', { name: `Reading your music, ${SCAN_PAGE_SIZE} songs found` })).toBeTruthy();
+  expect(screen.getByText(`${SCAN_PAGE_SIZE} songs found`)).toBeTruthy();
+  expect(screen.queryByPlaceholderText('Search songs or artists')).toBeNull();
+
+  release();
+  expect(await screen.findByText('600 songs')).toBeTruthy();
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(offsets).toEqual([0, SCAN_PAGE_SIZE, 2 * SCAN_PAGE_SIZE]);
+});
+
+test('says when a search matches nothing, and shows every song again once it is cleared', async () => {
+  const { user } = await launch(songs());
+  const search = await screen.findByPlaceholderText('Search songs or artists');
+
+  await user.type(search, 'kraftwerk');
+  expect(await screen.findByText('No songs match your search.')).toBeTruthy();
+  expect(screen.getByText('0 of 3 songs')).toBeTruthy();
+  expect(stateOf(screen.getByRole('button', { name: 'Play all' }))).toMatchObject({ disabled: true });
+  expect(stateOf(screen.getByRole('button', { name: 'Shuffle' }))).toMatchObject({ disabled: true });
+
+  await user.clear(search);
+  expect(await screen.findByText('3 songs')).toBeTruthy();
+  expect(screen.queryByText('No songs match your search.')).toBeNull();
+  expect(stateOf(screen.getByRole('button', { name: 'Play all' }))).toMatchObject({ disabled: false });
+});
+
+test('says so when the device has no audio files, and offers nothing to play', async () => {
+  const { user, engine } = await launch([]);
+
+  expect(await screen.findByText('No audio files were found on this device.')).toBeTruthy();
+  expect(screen.getByText('0 songs')).toBeTruthy();
+  const playAll = screen.getByRole('button', { name: 'Play all' });
+  expect(stateOf(playAll)).toMatchObject({ disabled: true });
+
+  await user.press(playAll);
+  expect(engine.loaded).toEqual([]);
+});
+
+test('picks up a song added to the device when the user rescans the library', async () => {
+  const files = songs();
+  const { user } = await launch(files);
+  expect(await screen.findByText('3 songs')).toBeTruthy();
+
+  files.push(['4', 'Justice - D.A.N.C.E..mp3', 242]);
+  await user.press(screen.getByRole('button', { name: 'Rescan library' }));
+
+  expect(await screen.findByText('4 songs')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'D.A.N.C.E., Justice' })).toBeTruthy();
+});
+
+test('plays only the songs that match the search with play all, and moves to the next match', async () => {
+  const { user, engine } = await launch(songs());
+
+  await user.type(await screen.findByPlaceholderText('Search songs or artists'), 'daft');
+  expect(await screen.findByText('2 of 3 songs')).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Play all' }));
+
+  expect(await screen.findByRole('heading', { name: 'Digital Love' })).toBeTruthy();
+  expect(engine.loaded).toEqual(['file:///music/1.mp3']);
+
+  await user.press(fullPlayer().getByRole('button', { name: 'Next' }));
+  expect(await screen.findByRole('heading', { name: 'One More Time' })).toBeTruthy();
+  expect(engine.loaded).toEqual(['file:///music/1.mp3', 'file:///music/3.mp3']);
+});
+
+test('starts a shuffled run with shuffle, which the full player shows as on', async () => {
+  const { user, engine } = await launch(songs());
+
+  await user.press(await screen.findByRole('button', { name: 'Shuffle' }));
+  await waitFor(() => expect(engine.loaded).toHaveLength(1));
+  expect(engine.loaded[0]).toMatch(/^file:\/\/\/music\/[123]\.mp3$/);
+  expect(screen.queryByText('Nothing playing')).toBeNull();
+
+  await user.press(screen.getByRole('button', { name: 'Open player' }));
+  const shuffle = fullPlayer().getByRole('button', { name: 'Shuffle' });
+  expect(stateOf(shuffle)).toMatchObject({ selected: true });
+});
+
+test('marks the song that is playing in the list', async () => {
+  const { user } = await launch(songs());
+
+  await user.press(await screen.findByRole('button', { name: 'One More Time, Daft Punk' }));
+  await user.press(await screen.findByRole('button', { name: 'Close player' }));
+
+  expect(stateOf(screen.getByRole('button', { name: 'One More Time, Daft Punk' }))).toMatchObject({ selected: true });
+  expect(stateOf(screen.getByRole('button', { name: 'Digital Love, Daft Punk' }))).toMatchObject({ selected: false });
+});
+
+test('says a song cannot be played when its file cannot be opened', async () => {
+  const { user, engine } = await launch(songs(), { unplayable: ['2'] });
+
+  await user.press(await screen.findByRole('button', { name: 'La Femme d Argent, Air' }));
+
+  expect(await screen.findByRole('alert', { name: 'Could not play "La Femme d Argent".' })).toBeTruthy();
+  expect(engine.loaded).toEqual([]);
+});
+
+test('offers to add to a playlist or change the cover from a song\'s menu, and cancel does nothing', async () => {
+  const { user, dialogs, engine } = await launch(songs());
+
+  await user.press(await screen.findByRole('button', { name: 'More for Digital Love' }));
+  await waitFor(() => expect(dialogs.open?.title).toBe('Digital Love'));
+  expect(dialogs.open?.buttons).toEqual(['Add to playlist', 'Change cover', 'Cancel']);
+  expect(engine.loaded).toEqual([]);
+
+  await dialogs.answer('Cancel');
+  expect(dialogs.open).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Add "Digital Love"' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Cover of "Digital Love"' })).toBeNull();
+  expect(screen.queryByText('Now playing')).toBeNull();
+});
+
+test('opens the cover sheet from a song\'s menu', async () => {
+  const { user, dialogs } = await launch(songs());
+
+  await user.press(await screen.findByRole('button', { name: 'More for Digital Love' }));
+  await waitFor(() => expect(dialogs.open?.title).toBe('Digital Love'));
+  await dialogs.answer('Change cover');
+
+  expect(await screen.findByRole('heading', { name: 'Cover of "Digital Love"' })).toBeTruthy();
+  expect(screen.getByText('This song has no cover yet.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Choose image' })).toBeTruthy();
+
+  await user.press(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('heading', { name: 'Cover of "Digital Love"' })).toBeNull();
+});
+
+test('creates a playlist with a song from its menu, which then shows in the playlists tab', async () => {
+  const { user, dialogs } = await launch(songs());
+
+  await user.press(await screen.findByRole('button', { name: 'More for Digital Love' }));
+  await waitFor(() => expect(dialogs.open?.title).toBe('Digital Love'));
+  await dialogs.answer('Add to playlist');
+
+  expect(await screen.findByRole('heading', { name: 'Add "Digital Love"' })).toBeTruthy();
+  expect(screen.getByText('No playlists yet. Name one above to create it with this song.')).toBeTruthy();
+  const create = screen.getByRole('button', { name: 'Create' });
+  expect(stateOf(create)).toMatchObject({ disabled: true });
+
+  await user.type(screen.getByPlaceholderText('New playlist name'), '  Road trip ');
+  await user.press(screen.getByRole('button', { name: 'Create' }));
+
+  expect(dialogs.toasts).toEqual(['Created Road trip']);
+  expect(screen.queryByRole('heading', { name: 'Add "Digital Love"' })).toBeNull();
+  await user.press(screen.getByRole('tab', { name: 'Playlists' }));
+  const card = screen.getByRole('button', { name: 'Open Road trip' });
+  expect(within(card).getByText('1 song')).toBeTruthy();
+});
+
+test('adds a long-pressed song to an existing playlist, and says when it is already there', async () => {
+  const { user, dialogs } = await launch(songs());
+
+  await user.longPress(await screen.findByRole('button', { name: 'Digital Love, Daft Punk' }));
+  await user.type(await screen.findByPlaceholderText('New playlist name'), 'Gym');
+  await user.press(screen.getByRole('button', { name: 'Create' }));
+
+  await user.longPress(screen.getByRole('button', { name: 'One More Time, Daft Punk' }));
+  expect(await screen.findByRole('heading', { name: 'Add "One More Time"' })).toBeTruthy();
+  await user.press(screen.getByRole('button', { name: 'Add to Gym' }));
+  expect(dialogs.toasts.at(-1)).toBe('Added to Gym');
+
+  await user.longPress(screen.getByRole('button', { name: 'One More Time, Daft Punk' }));
+  await user.press(await screen.findByRole('button', { name: 'Add to Gym' }));
+  expect(dialogs.toasts).toEqual(['Created Gym', 'Added to Gym', 'Already in Gym']);
+
+  await user.press(screen.getByRole('tab', { name: 'Playlists' }));
+  expect(within(screen.getByRole('button', { name: 'Open Gym' })).getByText('2 songs')).toBeTruthy();
+});
+
+test('removes a cover the user chose, which brings back the placeholder', async () => {
+  const disk = new Map([['file:///picked/art.png', Uint8Array.from([1, 2, 3])]]);
+  const picked = { uri: 'file:///picked/art.png', name: 'art.png', mimeType: 'image/png', size: 3, lastModified: 0 };
+  const { user, dialogs } = await launch(songs(), {}, [memoryFiles(disk), fakeDocumentPicker([picked])]);
+  const saved = () => [...disk.keys()].filter((uri) => uri.startsWith('file:///documents/covers/1-'));
+
+  await user.press(await screen.findByRole('button', { name: 'More for Digital Love' }));
+  await waitFor(() => expect(dialogs.open?.title).toBe('Digital Love'));
+  await dialogs.answer('Change cover');
+  await user.press(await screen.findByRole('button', { name: 'Choose image' }));
+  expect(await screen.findByText('Your image.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Change image' })).toBeTruthy();
+  expect(saved()).toHaveLength(1);
+
+  await user.press(screen.getByRole('button', { name: 'Remove my cover' }));
+
+  expect(await screen.findByText('This song has no cover yet.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Remove my cover' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Choose image' })).toBeTruthy();
+  expect(saved()).toEqual([]);
+});
+
+test('refuses an image too large for a cover, and says why', async () => {
+  const picked = { uri: 'file:///picked/huge.png', name: 'huge.png', mimeType: 'image/png', size: 20_000_000, lastModified: 0 };
+  const { user, dialogs } = await launch(songs(), {}, [memoryFiles(), fakeDocumentPicker([picked])]);
+
+  await user.press(await screen.findByRole('button', { name: 'More for Digital Love' }));
+  await waitFor(() => expect(dialogs.open?.title).toBe('Digital Love'));
+  await dialogs.answer('Change cover');
+  await user.press(await screen.findByRole('button', { name: 'Choose image' }));
+
+  await waitFor(() => expect(dialogs.open?.title).toBe('Could not set the cover'));
+  expect(dialogs.open?.message).toBe('The image is too large for a cover (10 MB at most).');
+  await dialogs.answer('OK');
+  expect(screen.getByText('This song has no cover yet.')).toBeTruthy();
+});

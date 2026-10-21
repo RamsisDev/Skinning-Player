@@ -1,0 +1,51 @@
+{
+  "name": "skinning-player",
+  "version": "1.0.0",
+  "license": "MIT",
+  "main": "src/main.ts",
+  "dependencies": {
+    "@angular/common": "^22.0.0",
+    "@angular/core": "^22.0.0",
+    "@ng-icons/core": "^36.1.0",
+    "@ng-icons/lucide": "^36.1.0",
+    "@ng-native/components": "0.16.0",
+    "@ng-native/device": "0.16.0",
+    "@ng-native/expo": "0.16.0",
+    "@ng-native/fabric": "0.16.0",
+    "@ng-native/icons": "0.16.0",
+    "@ng-native/metro": "0.16.0",
+    "@ng-native/platform": "0.16.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~57.0.26",
+    "expo-audio": "~57.0.5",
+    "expo-dev-client": "~57.0.20",
+    "expo-document-picker": "~57.0.3",
+    "expo-file-system": "~57.0.7",
+    "expo-font": "~57.0.4",
+    "expo-localization": "~57.0.2",
+    "expo-media-library": "~57.0.5",
+    "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "@angular/compiler-cli": "^22.0.0",
+    "@babel/core": "^7.29.7",
+    "@ng-native/testing": "0.16.0",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.0"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "node -e \"console.error('This app targets iOS and Android: use npm start, npm run ios or npm run android. To render it in a browser, see https://ng-native.com/packages/web#beside-a-native-app'); process.exit(1)\"",
+    "typecheck": "node metro.config.js && ngc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "private": true
+}
