@@ -18,6 +18,10 @@ it('tells hidden files, and audio that is not music, by their folders', () => {
   expect(isNonMusic('/storage/emulated/0/Podcasts/show.mp3')).toBe(true);
   expect(isNonMusic('/storage/emulated/0/Ringtones/ring.ogg')).toBe(true);
   expect(isNonMusic('/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes/1/a.opus')).toBe(true);
+  expect(isNonMusic('/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio/AUD-1.mp3')).toBe(true);
+  expect(isNonMusic('/storage/emulated/0/Android/media/com.whatsapp.w4b/WhatsApp Business/Media/x/a.opus')).toBe(true);
+  expect(isNonMusic('/storage/emulated/0/WhatsApp/Media/WhatsApp Audio/AUD-1.mp3')).toBe(true);
+  expect(isNonMusic('/storage/emulated/0/WhatsApp Business/Media/WhatsApp Business Voice Notes/1/a.opus')).toBe(true);
   expect(isNonMusic('/storage/emulated/0/Music/Recordings.mp3')).toBe(false);
 });
 

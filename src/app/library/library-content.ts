@@ -11,8 +11,9 @@ export interface ContentRules {
 
 /**
  * The folders that hold audio that is not music: Android's standard directories for podcasts,
- * audiobooks, ringtones, notifications, alarms and recordings, and the ones recorders and
- * messaging apps keep voice notes in. Android's media store says which files are music, but the
+ * audiobooks, ringtones, notifications, alarms and recordings, the ones recorders keep their
+ * recordings in, and WhatsApp's media: its voice notes and the audio received in chats, in the
+ * app's own media folder or, before Android 11, in a WhatsApp folder of its own. Android's media store says which files are music, but the
  * module the app reads it through does not, so the folder a file is in has to say it.
  */
 const NON_MUSIC = new Set([
@@ -31,7 +32,12 @@ const NON_MUSIC = new Set([
   'callrecordings',
   'call_rec',
   'voice notes',
+  'com.whatsapp',
+  'com.whatsapp.w4b',
   'whatsapp voice notes',
+  'whatsapp audio',
+  'whatsapp business voice notes',
+  'whatsapp business audio',
 ]);
 
 const segments = (path: string): string[] => path.split('/').filter(Boolean);

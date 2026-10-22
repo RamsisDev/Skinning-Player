@@ -81,7 +81,10 @@ export class CoverSheet {
     this.busy.set(true);
     try {
       const result = await this.covers.choose(track);
-      if (result && !result.ok) {
+      if (result?.ok) {
+        this.close.emit();
+        this.dialogs.notify(this.t().cover.changed);
+      } else if (result) {
         const t = this.t();
         const { error } = result;
         const message = error.code === 'tooLarge' ? t.cover.tooLarge : t.common.couldNotRead(error.file);

@@ -362,6 +362,18 @@ test('adds a long-pressed song to an existing playlist, and says when it is alre
   expect(within(screen.getByRole('button', { name: 'Open Gym' })).getByText('2 songs')).toBeTruthy();
 });
 
+test('closes the cover sheet once the cover is changed, and says so', async () => {
+  const disk = new Map([['file:///picked/art.png', Uint8Array.from([1, 2, 3])]]);
+  const picked = { uri: 'file:///picked/art.png', name: 'art.png', mimeType: 'image/png', size: 3, lastModified: 0 };
+  const { user, dialogs } = await launch(songs(), {}, [memoryFiles(disk), fakeDocumentPicker([picked])]);
+
+  await fromMenu(user, 'Digital Love', 'Change cover');
+  await user.press(await screen.findByRole('button', { name: 'Choose image' }));
+
+  await waitFor(() => expect(dialogs.toasts).toEqual(['Cover changed']));
+  expect(screen.queryByRole('heading', { name: 'Cover of "Digital Love"' })).toBeNull();
+});
+
 test('removes a cover the user chose, which brings back the placeholder', async () => {
   const disk = new Map([['file:///picked/art.png', Uint8Array.from([1, 2, 3])]]);
   const picked = { uri: 'file:///picked/art.png', name: 'art.png', mimeType: 'image/png', size: 3, lastModified: 0 };
@@ -370,6 +382,8 @@ test('removes a cover the user chose, which brings back the placeholder', async 
 
   await fromMenu(user, 'Digital Love', 'Change cover');
   await user.press(await screen.findByRole('button', { name: 'Choose image' }));
+  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Cover of "Digital Love"' })).toBeNull());
+  await fromMenu(user, 'Digital Love', 'Change cover');
   expect(await screen.findByText('Your image.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Change image' })).toBeTruthy();
   expect(saved()).toHaveLength(1);

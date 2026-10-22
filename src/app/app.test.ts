@@ -1,5 +1,5 @@
 import { FontRegistry, Fonts } from '@ng-native/expo/fonts';
-import { render, screen, userEvent } from '@ng-native/testing';
+import { render, screen, userEvent, waitFor } from '@ng-native/testing';
 import { expect, test } from 'vitest';
 import { App } from './app.ts';
 import { SkinManager } from './skins/skin-manager.ts';
@@ -68,7 +68,7 @@ test('sets a song\'s cover from the full player', async () => {
   expect(await screen.findByText('This song has no cover yet.')).toBeTruthy();
   await user.press(screen.getByRole('button', { name: 'Choose image' }));
 
-  expect(await screen.findByText('Your image.')).toBeTruthy();
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Choose image' })).toBeNull());
   expect(screen.getAllByRole('image', { name: 'Cover of Digital Love' }).length).toBeGreaterThan(0);
   expect([...disk.keys()].some((uri) => uri.startsWith('file:///documents/covers/1-'))).toBe(true);
 });
