@@ -69,6 +69,7 @@ export const ICON_SLOTS = [
   'queue',
   'moveUp',
   'moveDown',
+  'drag',
   'share',
   'info',
 ] as const;

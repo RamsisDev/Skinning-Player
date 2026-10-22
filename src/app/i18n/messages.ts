@@ -3,10 +3,11 @@
  * the `Messages` type, so a language missing a string, or an argument, fails the build.
  */
 
-import { type BarAction, type PlayFrom } from '../core/behavior-settings.ts';
-import { type ReleaseKind, type ReleaseRefinement } from '../core/release-type.ts';
-import { type SortMode } from '../core/sorting.ts';
-import { type Separator } from '../core/track.ts';
+import { type BarAction, type PlayFrom } from '../settings/behavior-settings.ts';
+import { type ReleaseKind, type ReleaseRefinement } from '../library/release-type.ts';
+import { type ReplayGainMode } from '../audio/replay-gain.ts';
+import { type SortMode } from '../library/sorting.ts';
+import { type Separator } from '../library/track.ts';
 
 const songs = (n: number): string => (n === 1 ? '1 song' : `${n} songs`);
 
@@ -154,6 +155,28 @@ export const en = {
     pauseOnRepeatHint: 'With repeat one, stops at the end of the song instead of playing it again.',
     rememberPause: 'Remember pause',
     rememberPauseHint: 'Stays paused when skipping songs or taking the one playing out of the queue.',
+    stopOnTaskRemoved: 'Stop when removed from recents',
+    stopOnTaskRemovedHint: 'Stops playing, and closes the notification, when the app is swiped out of recents.',
+    autoplayOnHeadset: 'Play when headphones connect',
+    autoplayOnHeadsetHint: 'Starts playing when wired or Bluetooth headphones connect. Disconnecting them always pauses.',
+    replayGain: 'ReplayGain',
+    replayGainModes: { off: 'Off', track: 'Track', album: 'Album', dynamic: 'Album if one plays' } as Record<ReplayGainMode, string>,
+    replayGainHint: {
+      off: 'Plays every song at the volume it was mastered at.',
+      track: 'Evens out the volume of each song on its own.',
+      album: 'Evens out the volume of each album, keeping its quiet and loud songs as they are.',
+      dynamic: "Evens out an album's volume while the album plays, and each song's otherwise.",
+    } as Record<ReplayGainMode, string>,
+    preAmpTagged: 'Pre-amp with ReplayGain',
+    preAmpTaggedHint: 'Added to the adjustment of the songs that have one.',
+    preAmpUntagged: 'Pre-amp without ReplayGain',
+    preAmpUntaggedHint: 'The volume of the songs with no ReplayGain tags, against the rest.',
+    lowerPreAmp: (name: string) => `Lower ${name}`,
+    raisePreAmp: (name: string) => `Raise ${name}`,
+    decibels: (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(1)} dB`,
+    equalizer: 'Equalizer',
+    equalizerHint: "Opens the system's equalizer, or one installed such as Wavelet.",
+    noEqualizer: 'There is no equalizer to open on this device.',
     interface: 'Interface',
     libraryTabs: 'Library tabs',
     libraryTabsHint: 'Which lists the library shows, and in what order. One stays on.',
@@ -318,6 +341,7 @@ export const en = {
     empty: 'The queue is empty.',
     moveUp: (title: string) => `Move ${title} up`,
     moveDown: (title: string) => `Move ${title} down`,
+    reorder: (title: string) => `Reorder ${title}`,
     remove: (title: string) => `Remove ${title} from the queue`,
   },
   properties: {
@@ -519,6 +543,28 @@ export const es: Messages = {
     pauseOnRepeatHint: 'Con repetir una, se detiene al final de la canción en vez de volver a reproducirla.',
     rememberPause: 'Recordar la pausa',
     rememberPauseHint: 'Sigue en pausa al saltar canciones o al quitar de la cola la que suena.',
+    stopOnTaskRemoved: 'Detener al quitar de recientes',
+    stopOnTaskRemovedHint: 'Deja de reproducir, y cierra la notificación, al deslizar la app fuera de recientes.',
+    autoplayOnHeadset: 'Reproducir al conectar audífonos',
+    autoplayOnHeadsetHint: 'Empieza a reproducir al conectar audífonos con cable o Bluetooth. Desconectarlos siempre pausa.',
+    replayGain: 'ReplayGain',
+    replayGainModes: { off: 'Desactivado', track: 'Canción', album: 'Álbum', dynamic: 'Álbum si suena uno' },
+    replayGainHint: {
+      off: 'Reproduce cada canción al volumen con que se masterizó.',
+      track: 'Iguala el volumen de cada canción por separado.',
+      album: 'Iguala el volumen de cada álbum, y deja sus canciones suaves y fuertes como son.',
+      dynamic: 'Iguala el volumen del álbum mientras suena el álbum, y el de cada canción si no.',
+    },
+    preAmpTagged: 'Preamplificación con ReplayGain',
+    preAmpTaggedHint: 'Se suma al ajuste de las canciones que lo tienen.',
+    preAmpUntagged: 'Preamplificación sin ReplayGain',
+    preAmpUntaggedHint: 'El volumen de las canciones sin etiquetas de ReplayGain, frente al resto.',
+    lowerPreAmp: (name) => `Bajar ${name}`,
+    raisePreAmp: (name) => `Subir ${name}`,
+    decibels: (n) => `${n > 0 ? '+' : ''}${n.toFixed(1).replace('.', ',')} dB`,
+    equalizer: 'Ecualizador',
+    equalizerHint: 'Abre el ecualizador del sistema, o uno instalado como Wavelet.',
+    noEqualizer: 'No hay un ecualizador que abrir en este dispositivo.',
     interface: 'Interfaz',
     libraryTabs: 'Pestañas de la biblioteca',
     libraryTabsHint: 'Qué listas muestra la biblioteca y en qué orden. Siempre queda una.',
@@ -682,6 +728,7 @@ export const es: Messages = {
     empty: 'La cola está vacía.',
     moveUp: (title) => `Subir ${title}`,
     moveDown: (title) => `Bajar ${title}`,
+    reorder: (title) => `Reordenar ${title}`,
     remove: (title) => `Quitar ${title} de la cola`,
   },
   properties: {

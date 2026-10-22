@@ -1,0 +1,29 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.skinningplayer.audio'
+version = '1.0.0'
+
+android {
+  namespace "com.skinningplayer.audio"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation 'androidx.core:core-ktx:1.15.0'
+
+  // The same Media3 as expo-audio, so the two resolve to one copy.
+  def androidxMedia3Version = "1.9.0"
+  implementation "androidx.media3:media3-common:$androidxMedia3Version"
+  implementation "androidx.media3:media3-exoplayer:$androidxMedia3Version"
+  implementation "androidx.media3:media3-session:$androidxMedia3Version"
+}

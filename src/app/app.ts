@@ -1,21 +1,24 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, Injector, effect, inject, signal } from '@angular/core';
 import { Pressable, SafeAreaProvider, SafeAreaView, Text, View } from '@ng-native/components';
+import { GestureRoot } from '@ng-native/components/gestures';
 import { HardwareBack, StatusBar } from '@ng-native/device';
+import { AUDIO_ENGINE } from './audio/audio-engine.ts';
+import { AutoBrowse } from './player/auto-browse.ts';
 import { I18n } from './i18n/i18n.ts';
-import { LanguageSheet } from './screens/language-sheet.ts';
-import { LibraryScreen } from './screens/library-screen.ts';
-import { NowPlaying } from './screens/now-playing.ts';
-import { PlaylistsScreen } from './screens/playlists-screen.ts';
-import { SearchScreen } from './screens/search-screen.ts';
-import { SettingsScreen } from './screens/settings-screen.ts';
-import { SkinsScreen } from './screens/skins-screen.ts';
+import { LanguageSheet } from './i18n/language-sheet.ts';
+import { LibraryScreen } from './library/library-screen.ts';
+import { NowPlaying } from './player/now-playing.ts';
+import { PlaylistsScreen } from './playlists/playlists-screen.ts';
+import { SearchScreen } from './search/search-screen.ts';
+import { SettingsScreen } from './settings/settings-screen.ts';
+import { SkinsScreen } from './skins/skins-screen.ts';
 import { SkinManager } from './skins/skin-manager.ts';
-import { PlayerView } from './ui/player-view.ts';
-import { Navigation } from './ui/navigation.ts';
-import { SkinBackdrop } from './ui/skin-backdrop.ts';
-import { SkinIcon } from './ui/skin-icon.ts';
-import { TabMenu } from './ui/tab-menu.ts';
-import { MiniPlayer } from './widgets/mini-player.ts';
+import { PlayerView } from './player/player-view.ts';
+import { Navigation } from './shared/navigation.ts';
+import { SkinBackdrop } from './skins/skin-backdrop.ts';
+import { SkinIcon } from './skins/skin-icon.ts';
+import { TabMenu } from './shared/tab-menu.ts';
+import { MiniPlayer } from './player/mini-player.ts';
 
 /**
  * The shell. The active skin's tokens are set on the root view and cascade into every component
@@ -23,6 +26,7 @@ import { MiniPlayer } from './widgets/mini-player.ts';
  */
 @Component({
   imports: [
+    GestureRoot,
     LanguageSheet,
     LibraryScreen,
     MiniPlayer,
@@ -42,7 +46,7 @@ import { MiniPlayer } from './widgets/mini-player.ts';
   ],
   selector: 'app-root',
   template: `
-    <safe-area-provider>
+    <gesture-root><safe-area-provider>
       <view class="root" [class]="skins.easingClass()" [style]="skins.cssVars()">
         <app-skin-backdrop />
         <safe-area-view class="screen" [edges]="['top', 'bottom']">
@@ -103,7 +107,7 @@ import { MiniPlayer } from './widgets/mini-player.ts';
         <app-now-playing />
         <app-language-sheet [open]="choosingLanguage()" (close)="choosingLanguage.set(false)" />
       </view>
-    </safe-area-provider>
+    </safe-area-provider></gesture-root>
   `,
   styles: `
     :host {
@@ -194,6 +198,8 @@ export class App {
   protected readonly choosingLanguage = signal(false);
 
   constructor() {
+    // Android Auto's browse tree follows the library from launch, where the platform has it.
+    if (inject(AUDIO_ENGINE).features.browseTree) inject(Injector).get(AutoBrowse);
     const statusBar = inject(StatusBar);
     effect(() => statusBar.set({ style: this.skins.active().statusBar === 'light' ? 'light' : 'dark' }));
 

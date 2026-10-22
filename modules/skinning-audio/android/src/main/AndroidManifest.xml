@@ -1,0 +1,32 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <!-- Android 11+ package visibility: the equalizer apps (the system one, Wavelet and the like). -->
+  <queries>
+    <intent>
+      <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+    </intent>
+    <intent>
+      <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
+    </intent>
+  </queries>
+
+  <application>
+    <!-- Exported for Android Auto and other media browsers (MediaBrowserCompat and Media3). -->
+    <service
+      android:name="com.skinningplayer.audio.SkinningAudioService"
+      android:exported="true"
+      android:foregroundServiceType="mediaPlayback">
+      <intent-filter>
+        <action android:name="androidx.media3.session.MediaLibraryService" />
+        <action android:name="android.media.browse.MediaBrowserService" />
+      </intent-filter>
+    </service>
+
+    <meta-data
+      android:name="com.google.android.gms.car.application"
+      android:resource="@xml/automotive_app_desc" />
+  </application>
+</manifest>

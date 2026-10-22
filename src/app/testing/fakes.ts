@@ -18,8 +18,17 @@ import { MediaLibrary } from '@ng-native/expo/media-library';
 import { type PlayerState } from '@ng-native/expo/player';
 import { Store } from '@ng-native/expo/store';
 import { settle } from '@ng-native/testing';
-import { AUDIO_ENGINE, type AudioEngine } from '../core/audio-engine.ts';
-import { type Track, trackFromFile } from '../core/track.ts';
+import {
+  AUDIO_ENGINE,
+  type AudioEngine,
+  type AudioItem,
+  type AudioOptions,
+  type BrowseNode,
+  type EngineFeatures,
+  type RemoteCommand,
+} from '../audio/audio-engine.ts';
+import { DEVICE_PLATFORM, type DevicePlatform, type Feature, HIDDEN } from '../audio/features.ts';
+import { type Track, trackFromFile } from '../library/track.ts';
 
 /** A key-value store over a map, holding JSON text as the device would. */
 export function memoryStorage(disk = new Map<string, string>()): Provider {
@@ -98,15 +107,44 @@ export function fakeDocumentPicker(picks: PickedDocument[]): Provider {
 }
 
 export interface FakeEngine extends AudioEngine {
+  /** The uri of every song loaded, oldest first; not the ones run into from the next slot. */
   readonly loaded: string[];
-  /** Plays the current source to its end. */
+  /** The song playing, as it was loaded or run into, with its gain as changed since. */
+  readonly item: AudioItem | null;
+  /** The song held to run into, or null. */
+  readonly next: AudioItem | null;
+  /** Every gain set on the song playing with `setGain`, oldest first. */
+  readonly gains: number[];
+  /** The options set last, or null before any are. */
+  readonly options: AudioOptions | null;
+  /** The browse tree set last, or null before one is. */
+  readonly tree: readonly BrowseNode[] | null;
+  /** How many times the equalizer was opened. */
+  readonly equalizerOpened: number;
+  /** Plays the current source to its end: into the song held, if there is one, as native does. */
   finish(): void;
+  /** Runs into the song held, as native does at the end of a song. Throws when nothing is held. */
+  advance(): void;
+  /** Presses next or previous on the notification, a headset or Android Auto. */
+  remote(command: RemoteCommand): void;
+  /** Picks an id of the browse tree in Android Auto. */
+  request(id: string): void;
   /** Reports that the current source cannot be decoded, as native does for a damaged file. */
   fail(): void;
 }
 
+export interface FakeEngineOptions {
+  /** Runs into the song held at the end of one, as Skinning Audio does; otherwise it ignores `setNext`, as expo-audio does. */
+  readonly gapless?: boolean;
+  /** Whether there is an equalizer to open. */
+  readonly equalizer?: boolean;
+  /** What else it does, as a platform that hides some of it would have it; all of it by default. */
+  readonly features?: Partial<Omit<EngineFeatures, 'gapless'>>;
+}
+
 /** A player that reports what native would, without playing anything. */
-export function fakeEngine(): FakeEngine {
+export function fakeEngine(config: FakeEngineOptions = {}): FakeEngine {
+  const gapless = config.gapless ?? false;
   const state = signal<PlayerState>({
     playing: false,
     status: 'idle',
@@ -117,19 +155,85 @@ export function fakeEngine(): FakeEngine {
     ended: false,
   });
   const loaded: string[] = [];
+  const gains: number[] = [];
+  let item: AudioItem | null = null;
+  let next: AudioItem | null = null;
+  let options: AudioOptions | null = null;
+  let tree: readonly BrowseNode[] | null = null;
+  let equalizerOpened = 0;
+  const listeners = {
+    advance: new Set<(id: string) => void>(),
+    remote: new Set<(command: RemoteCommand) => void>(),
+    request: new Set<(id: string) => void>(),
+  };
+  const listen =
+    <T>(set: Set<(value: T) => void>) =>
+    (listener: (value: T) => void) => {
+      set.add(listener);
+      return () => void set.delete(listener);
+    };
+  const advance = () => {
+    if (!next) throw new Error('No song is held to run into.');
+    item = next;
+    next = null;
+    state.set({ ...state(), status: 'readyToPlay', playing: true, ended: false, currentTime: 0, duration: 200 });
+    for (const listener of [...listeners.advance]) listener(item.id);
+  };
   return {
     state: state.asReadonly(),
+    features: { gapless, equalizer: true, stopOnTaskRemoved: true, autoplayOnHeadset: true, browseTree: true, ...config.features },
     loaded,
-    load(uri, _info, play = true) {
-      loaded.push(uri);
-      state.set({ ...state(), status: 'readyToPlay', playing: play, ended: false, currentTime: 0, duration: 200 });
+    gains,
+    get item() {
+      return item;
     },
+    get next() {
+      return next;
+    },
+    get options() {
+      return options;
+    },
+    get tree() {
+      return tree;
+    },
+    get equalizerOpened() {
+      return equalizerOpened;
+    },
+    load(loading, play = true, startAt = 0) {
+      loaded.push(loading.uri);
+      item = loading;
+      next = null;
+      state.set({ ...state(), status: 'readyToPlay', playing: play, ended: false, currentTime: startAt, duration: 200 });
+    },
+    setNext: (held) => void (gapless && (next = held)),
     play: () => state.set({ ...state(), playing: true, ended: false }),
     pause: () => state.set({ ...state(), playing: false }),
     seekTo: (seconds) => state.set({ ...state(), currentTime: seconds }),
-    finish: () => state.set({ ...state(), playing: false, ended: true, currentTime: state().duration }),
+    setGain(gainDb) {
+      gains.push(gainDb);
+      if (item) item = { ...item, gainDb };
+    },
+    setOptions: (set) => void (options = set),
+    hasEqualizer: () => config.equalizer ?? false,
+    openEqualizer: () => !!config.equalizer && !!++equalizerOpened,
+    setBrowseTree: (roots) => void (tree = roots),
+    onAdvance: listen(listeners.advance),
+    onRemoteCommand: listen(listeners.remote),
+    onPlayRequest: listen(listeners.request),
+    finish: () => (next ? advance() : state.set({ ...state(), playing: false, ended: true, currentTime: state().duration })),
+    advance,
+    remote: (command) => [...listeners.remote].forEach((listener) => listener(command)),
+    request: (id) => [...listeners.request].forEach((listener) => listener(id)),
     fail: () => state.set({ ...state(), status: 'error', playing: false, currentTime: 0, duration: 0 }),
   };
+}
+
+/** A device on `platform` that hides `hidden` there, in place of the app's own list. */
+export function featuresOn(platform: DevicePlatform, hidden: readonly Feature[] = []): Provider[] {
+  return [
+    { provide: DEVICE_PLATFORM, useValue: platform },
+    { provide: HIDDEN, useValue: { ios: [], android: [], [platform]: hidden } },
+  ];
 }
 
 export function engineProvider(engine: FakeEngine): Provider {

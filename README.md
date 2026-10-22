@@ -33,14 +33,24 @@ adb shell content call --method scan_volume --uri content://media --arg external
 
 ## Layout
 
+Each domain keeps its service, its screens and sheets, and its tests (`*.flow.test.ts` drive
+whole screens) together. How the domains depend on each other, and where new code goes: [docs/architecture.md](docs/architecture.md).
+
 | Path | What lives there |
 |---|---|
-| `src/app/core/` | Tracks and their tags, the device music library and its settings, albums, artists and genres, sorting, playlists, covers, the play queue and the audio engine. |
-| `src/app/skins/` | The skin format, its validator, the built-in skins and `SkinManager`. |
-| `src/app/ui/` | Skinned building blocks: buttons, icons, the tab menu, sheets, track rows. |
-| `src/app/widgets/` | Mini player, LCD display, visualizer and seek bar. |
-| `src/app/screens/` | Library (songs, albums, artists, genres and their pages), search, settings, playlists, skins and the full-screen player. |
-| `src/app/i18n/` | The app's strings in English and Spanish, and the `I18n` service that picks one. |
+| `src/app/library/` | Tracks, the device music library and its settings, filters, sorting, covers, track rows and the library tab. |
+| `src/app/metadata/` | Reading tags, covers and audio details out of the file bytes (ID3, FLAC, MP4, Ogg, WAV). |
+| `src/app/catalog/` | Albums, artists and genres: their lists and pages. |
+| `src/app/player/` | The play queue, the full-screen player, the queue sheet, the mini player and its widgets, and the Android Auto browse tree. |
+| `src/app/audio/` | The audio engine (Skinning Audio or `expo-audio`), platform features and ReplayGain. |
+| `src/app/playlists/` | Playlists, their tab and the sheets that add to them. |
+| `src/app/search/` | The search and its screen. |
+| `src/app/songs/` | The song menu, its properties and cover sheets. |
+| `src/app/settings/` | Playback and interface settings and their screen. |
+| `src/app/skins/` | The skin format, its validator, the built-in skins, `SkinManager`, the skinned buttons and icons, and the skins tab. |
+| `src/app/shared/` | Building blocks no domain owns: sheets, the menu sheet, the tab menu and navigation. |
+| `src/app/i18n/` | The app's strings in English and Spanish, the `I18n` service that picks one, and the language sheet. |
+| `src/app/testing/` | Fakes of the native side for the tests. |
 | `skins/` | Example skin files to copy to a phone and load. |
 
 ## Language
@@ -205,7 +215,7 @@ so a skin only has to list what it changes (like a Winamp skin missing a bitmap)
   `play`, `pause`, `previous`, `next`, `shuffle`, `repeat`, `repeatOne`, `library`, `playlists`,
   `skins`, `add`, `addToPlaylist`, `more`, `close`, `back`, `remove`, `rename`, `search`,
   `import`, `check`, `refresh`, `cover`, `warning`, `settings`, `sort`, `queue`, `moveUp`,
-  `moveDown`, `share`, `info`. `null` restores the default icon.
+  `moveDown`, `drag`, `share`, `info`. `null` restores the default icon.
 - **`widgets`**: show or hide the visualizer (4 to 32 bars) and the mini player's display.
 - **`motion`**: `speed` from 0 to 4 (0 turns motion off), an `easing` (`linear`, `ease`,
   `ease-in`, `ease-out`, `ease-in-out`, `smooth`, `snappy`, `bouncy`), how a pressed button
